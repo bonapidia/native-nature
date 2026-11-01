@@ -4,345 +4,419 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Native Nature</title>
-<meta name="description" content="Snap a photo of any plant or animal and find out what it is.">
+<meta name="description" content="Native plants, wildlife, and invasive species, anywhere on Earth.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Jost:wght@300;400;500;600&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
-/* Layout: a field-specimen workbench: photo tray on the left, herbarium-style label on the right; stacks on phones. */
+/* Layout: forest-night field guide. Hero with live record stats, a pill tab bar, then one panel per tool. */
 :root{
-  color-scheme:light;
-  --paper:#eef2ee; --card:#ffffff; --ink:#14231d; --muted:#5b6b63; --line:#cfd9d2;
-  --moss:#1f6b4f; --moss-ink:#ffffff; --tag:#f2d24b; --tag-ink:#2a2306;
-  --warn-bg:#fdecec; --warn:#a42828;
-  --f-display:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif;
-  --f-body:"Atkinson Hyperlegible",system-ui,-apple-system,sans-serif;
-  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+  --bg:#0b1611; --bg2:#0f2019; --card:#12231c; --card2:#172d24; --line:#284136;
+  --ink:#eef1e7; --muted:#9db2a5; --faint:#6f877a;
+  --green:#7db893; --green-ink:#08160f; --gold:#ecbd6e; --gold2:#c88a3a; --gold-ink:#2a1904;
+  --native:#7db893; --intro:#e8c45f; --invasive:#ff8a78; --invasive-bg:#3b1915;
+  --f-display:"Cormorant Garamond",Georgia,"Times New Roman",serif;
+  --f-body:"Jost","Segoe UI",system-ui,-apple-system,sans-serif;
+  --r:18px;
 }
-@media (prefers-color-scheme:dark){:root{
-  --paper:#0f1714; --card:#17221d; --ink:#e4ece7; --muted:#9db0a6; --line:#2a3a33;
-  --moss:#5cc79a; --moss-ink:#08130e; --tag:#e9c93f; --tag-ink:#231d04;
-  --warn-bg:#3a1717; --warn:#ff9a9a; color-scheme:dark}}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 var(--f-body);
-  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
-  padding-block:max(28px,env(safe-area-inset-top,0px)) max(48px,env(safe-area-inset-bottom,0px))}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.55 var(--f-body)}
 img{max-width:100%}
 [hidden]{display:none!important}
-.wrap{max-width:1040px;margin:0 auto;display:grid;gap:28px}
-h1{font:800 clamp(2.2rem,6vw,3.4rem)/1 var(--f-display);letter-spacing:-.02em;margin:0}
-h1 span{background:var(--tag);color:var(--tag-ink);padding:0 .18em;border-radius:4px}
-.sub{color:var(--muted);margin:6px 0 0;max-width:62ch}
-.eyebrow{font:500 .72rem var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+a{color:var(--gold)}
+button,input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.gut{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto}
+.small{font-size:.86rem;color:var(--muted)}
+.eyebrow{font:500 .72rem var(--f-body);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 
-.bench{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:24px;align-items:start}
-@media (max-width:760px){.bench{grid-template-columns:1fr}}
-.tray{display:grid;gap:12px;min-width:0}
-.drop{position:relative;border:2px dashed var(--line);border-radius:14px;background:var(--card);
-  aspect-ratio:4/3;width:100%;display:grid;place-items:center;overflow:hidden;cursor:pointer;transition:border-color .15s}
-.drop:hover,.drop.over,.drop:focus-visible{border-color:var(--moss);outline:none}
+/* Hero */
+.hero{background:radial-gradient(120% 90% at 85% 0%,rgba(236,189,110,.18),transparent 55%),linear-gradient(180deg,#1d3a2d 0%,#12271e 55%,var(--bg) 100%);
+  padding-block:max(44px,env(safe-area-inset-top,0px)) 48px;text-align:center}
+.hero h1{font:600 clamp(2.8rem,8vw,5rem)/1 var(--f-display);margin:0;color:#f6ecd3;letter-spacing:-.01em}
+.hero p.tag{font-weight:300;font-size:clamp(1rem,2.4vw,1.25rem);color:#d9e2d6;margin:14px auto 0;max-width:40ch}
+.stats{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin:30px auto 0;max-width:760px}
+.stat{min-width:140px;flex:1 1 140px;max-width:180px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:14px 10px}
+.stat b{display:block;font:500 1.9rem/1.1 var(--f-body);color:var(--gold);font-variant-numeric:tabular-nums}
+.stat span{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.cta{margin-top:30px;display:inline-flex;align-items:center;gap:12px;border:0;cursor:pointer;border-radius:999px;padding:16px 30px;
+  font:600 1.12rem var(--f-body);color:var(--gold-ink);background:linear-gradient(180deg,var(--gold),var(--gold2));box-shadow:0 10px 40px rgba(236,189,110,.28)}
+.cta:hover{filter:brightness(1.05)}
+
+/* Location bar + tabs */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:500;background:rgba(11,22,17,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:501}
+.tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-block:10px;max-width:1180px;margin:0 auto}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;border:0;background:transparent;color:var(--muted);border-radius:999px;padding:10px 18px;cursor:pointer;font-size:1rem}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{background:linear-gradient(180deg,#6aa57f,#4f8a65);color:#08160f;font-weight:500}
+.locbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding-block:12px;max-width:1180px;margin:0 auto}
+.locbar .where{display:flex;flex-direction:column;min-width:0;flex:1 1 220px}
+.locbar b{font-weight:500}
+.btn{border:1px solid var(--line);background:var(--card2);border-radius:999px;padding:9px 18px;cursor:pointer}
+.btn:hover{border-color:var(--green)}
+.btn.primary{background:linear-gradient(180deg,#6aa57f,#4f8a65);border-color:transparent;color:var(--green-ink);font-weight:500}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sm{padding:6px 13px;font-size:.88rem}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.field{background:#08120d;border:1px solid var(--line);border-radius:999px;padding:11px 18px;min-width:0}
+textarea.field{border-radius:14px;width:100%;resize:vertical;min-height:52px}
+.city{display:flex;gap:8px;flex:1 1 260px}
+.city .field{flex:1}
+
+main{padding-block:28px 60px}
+.panel{display:none}
+.panel.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:22px}
+h2.h{font:600 clamp(1.7rem,4vw,2.3rem)/1.1 var(--f-display);margin:0 0 4px;color:#f6ecd3}
+.lead{color:var(--muted);margin:0 0 18px;max-width:65ch}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:22px;align-items:start}
+@media (max-width:820px){.split{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:480px){.card{padding:16px}.rec{grid-template-columns:56px minmax(0,1fr);}.rec .ph{width:56px;height:56px}.rec [data-del]{grid-column:2;justify-self:start}}
+.status{font-size:.92rem;color:var(--muted);min-height:1.4em}
+.status.err{color:var(--invasive)}
+
+/* Species tiles */
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.tile{all:unset;box-sizing:border-box;cursor:pointer;display:grid;gap:6px;background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:8px}
+.tile:hover{border-color:var(--green)}
+.tile:focus-visible{outline:3px solid var(--gold)}
+.tile .ph{aspect-ratio:1;border-radius:10px;background:#0a1510 center/cover no-repeat;max-width:100%}
+.tile b{font-weight:500;font-size:.95rem;line-height:1.2}
+.tile i{font-size:.8rem;color:var(--muted)}
+.tile small{font-size:.76rem;color:var(--faint);font-variant-numeric:tabular-nums}
+.group{display:grid;gap:12px;margin-top:22px}
+.group h3{font:600 1.4rem var(--f-display);margin:0;display:flex;align-items:center;gap:10px}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.empty{color:var(--muted);padding:18px;border:1px dashed var(--line);border-radius:14px}
+
+/* Badges */
+.pill{display:inline-block;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.pill.native{color:var(--native);border-color:var(--native)}
+.pill.introduced{color:var(--intro);border-color:var(--intro)}
+.pill.invasive{color:var(--invasive);border-color:var(--invasive)}
+.nat{display:grid;gap:2px;border-radius:12px;padding:12px 14px;border:1.5px solid var(--line)}
+.nat b{font:600 1.35rem/1.1 var(--f-display)}
+.nat span{font-size:.9rem}
+.nat.native{border-color:var(--native);background:rgba(125,184,147,.1)}.nat.native b{color:var(--native)}
+.nat.introduced{border-color:var(--intro);background:rgba(232,196,95,.1)}.nat.introduced b{color:var(--intro)}
+.nat.invasive{border-color:var(--invasive);background:var(--invasive-bg)}.nat.invasive b{color:var(--invasive)}
+.nat.unknown{color:var(--muted)}
+
+/* Map */
+#map{height:420px;border-radius:14px;margin-top:14px;background:#0a1510}
+@media (max-width:820px){#map{height:320px}}
+.leaflet-container{font:inherit}
+#cityResults .btn,#mapResults .btn{font-size:.88rem;padding:6px 13px}
+
+/* Photo ID */
+.drop{position:relative;border:2px dashed var(--line);border-radius:16px;background:#08120d;aspect-ratio:4/3;width:100%;display:grid;place-items:center;overflow:hidden;cursor:pointer}
+.drop:hover,.drop.over{border-color:var(--gold)}
 .drop img{width:100%;height:100%;object-fit:cover}
 .hint{text-align:center;padding:20px;color:var(--muted)}
-.hint b{display:block;font:500 1.15rem var(--f-display);color:var(--ink);margin-bottom:4px}
-.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-button{font:700 .95rem var(--f-body);border-radius:999px;padding:11px 20px;border:1.5px solid var(--line);
-  background:var(--card);color:var(--ink);cursor:pointer}
-button:focus-visible,textarea:focus-visible,input:focus-visible{outline:3px solid var(--tag);outline-offset:2px}
-.primary{background:var(--moss);color:var(--moss-ink);border-color:var(--moss)}
-button:disabled{opacity:.5;cursor:not-allowed}
-textarea{width:100%;font:inherit;background:var(--card);color:var(--ink);border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;resize:vertical;min-height:52px}
-.small{font-size:.88rem;color:var(--muted)}
-.check{display:flex;gap:8px;align-items:center;font-size:.92rem}
-.status{font:500 .9rem var(--f-mono);color:var(--muted);min-height:1.4em}
-.status.err{color:var(--warn)}
-.steps{list-style:none;margin:0;padding:0;display:grid;gap:4px;font:400 .85rem var(--f-mono);color:var(--muted)}
-.steps li.on{color:var(--ink)} .steps li.done{color:var(--moss)}
-
-.label{background:var(--card);border:1.5px solid var(--ink);border-radius:6px;padding:22px 22px 18px;display:grid;gap:14px;min-width:0}
+.hint b{display:block;font:600 1.5rem var(--f-display);color:var(--ink);margin-bottom:4px}
+.tray{display:grid;gap:12px;min-width:0}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:4px;font-size:.9rem;color:var(--muted)}
+.steps li.on{color:var(--ink)}.steps li.done{color:var(--green)}
+.label{display:grid;gap:14px;min-width:0}
 .label-top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
-.chips{display:flex;gap:6px;flex-wrap:wrap}
-.chip{font:500 .72rem var(--f-mono);letter-spacing:.08em;text-transform:uppercase;padding:4px 9px;border-radius:999px;background:var(--tag);color:var(--tag-ink)}
-.chip.src{background:transparent;border:1px solid var(--moss);color:var(--moss)}
-.chip.ex{background:transparent;border:1px dashed var(--muted);color:var(--muted)}
-.common{font:800 clamp(1.7rem,4vw,2.3rem)/1.05 var(--f-display);margin:0;text-wrap:balance}
-.sci{font-style:italic;color:var(--muted);margin:2px 0 0;font-size:1.1rem}
+.common{font:600 clamp(1.9rem,4.5vw,2.6rem)/1.05 var(--f-display);margin:0;color:#f6ecd3}
+.sci{font-style:italic;color:var(--muted);margin:2px 0 0;font-size:1.05rem}
 .compare{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .compare figure{margin:0;display:grid;gap:4px}
-.compare img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;background:var(--line)}
-.compare figcaption{font-size:.72rem;color:var(--muted);line-height:1.3;overflow-wrap:anywhere}
-.conf{display:grid;gap:6px}
-.bar{height:8px;border-radius:99px;background:var(--line);overflow:hidden}
-.bar i{display:block;height:100%;background:var(--moss);transition:width .6s ease}
+.compare img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;background:#0a1510}
+.compare figcaption{font-size:.72rem;color:var(--faint);overflow-wrap:anywhere}
+.bar2{height:8px;border-radius:99px;background:var(--line);overflow:hidden}
+.bar2 i{display:block;height:100%;background:var(--green)}
 .taxa{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;margin:0;border-top:1px solid var(--line);padding-top:12px}
-.taxa dt{font:500 .75rem var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-top:3px}
+.taxa dt{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding-top:3px}
 .taxa dd{margin:0}
-.loc{display:grid;gap:10px;background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:12px 14px}
-.loc-head{display:grid;gap:2px}
-.loc-head b{font:700 1.05rem var(--f-body)}
-.city{flex:1 1 200px;flex-wrap:nowrap}
-.city input{flex:1;min-width:0;font:inherit;background:var(--paper);color:var(--ink);border:1.5px solid var(--line);border-radius:999px;padding:10px 14px}
-#cityResults button{padding:7px 14px;font-weight:400;font-size:.88rem}
-.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-.native{display:grid;gap:2px;border-radius:10px;padding:12px 14px;border:1.5px solid}
-.native b{font:800 1.15rem var(--f-display)}
-.native span{font-size:.88rem}
-.native.is-native{background:color-mix(in srgb,var(--moss) 14%,transparent);border-color:var(--moss)}
-.native.is-native b{color:var(--moss)}
-.native.is-introduced{background:color-mix(in srgb,var(--tag) 22%,transparent);border-color:var(--tag)}
-.native.is-invasive{background:var(--warn-bg);border-color:var(--warn)}
-.native.is-invasive b{color:var(--warn)}
-.native.is-unknown{border-color:var(--line);color:var(--muted)}
-.stats{display:flex;flex-wrap:wrap;gap:8px 20px;font-variant-numeric:tabular-nums}
-.stats b{font:800 1.3rem var(--f-display);display:block}
-.stats span{font-size:.8rem;color:var(--muted)}
-.sec h3{font:500 .75rem var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
-.sec p,.sec ul{margin:0}
-.sec ul{padding-left:1.2em}
-.safety{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:10px 12px;font-weight:700}
-.alts{font-size:.92rem;color:var(--muted);margin:0}
-.note{font-size:.88rem;color:var(--muted);margin:0}
-a{color:var(--moss);font-weight:700}
+.nums{display:flex;flex-wrap:wrap;gap:8px 22px;font-variant-numeric:tabular-nums}
+.nums b{font:500 1.3rem var(--f-body);display:block;color:var(--gold)}
+.nums span{font-size:.8rem;color:var(--muted)}
+.sec h4{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 4px;font-weight:500}
+.sec p,.sec ul{margin:0}.sec ul{padding-left:1.2em}
+.safety{background:var(--invasive-bg);color:var(--invasive);border-radius:10px;padding:10px 12px;font-weight:500}
+.note{font-size:.9rem;color:var(--muted);margin:0}
 
-.log h2{font:800 1.4rem var(--f-display);margin:0 0 10px}
-.log ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
-.log li button{all:unset;cursor:pointer;display:grid;gap:6px;width:100%;border-radius:10px;padding:8px;background:var(--card);border:1px solid var(--line);box-sizing:border-box}
-.log li button:focus-visible{outline:3px solid var(--tag)}
-.log img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px}
-.log b{font-size:.92rem;line-height:1.2}
-.log small{font:400 .72rem var(--f-mono);color:var(--muted)}
-footer{color:var(--muted);font-size:.85rem;display:grid;gap:4px}
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* Guided key */
+.q{font:600 clamp(1.6rem,4vw,2.2rem)/1.15 var(--f-display);margin:6px 0 18px;color:#f6ecd3}
+.answers{display:flex;gap:10px;flex-wrap:wrap}
+.answers .btn{padding:12px 28px;font-size:1.05rem}
+.trail{list-style:none;padding:0;margin:0 0 14px;display:flex;flex-wrap:wrap;gap:6px}
+.trail li{font-size:.82rem;color:var(--muted);background:var(--card2);border-radius:999px;padding:4px 10px}
+
+/* Records */
+.recs{display:grid;gap:10px}
+.rec{display:grid;grid-template-columns:72px minmax(0,1fr) auto;gap:14px;align-items:center;background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:10px}
+.rec .ph{width:72px;height:72px;border-radius:10px;background:#0a1510 center/cover no-repeat;cursor:pointer}
+.rec b{font-weight:500}
+.rec .meta{font-size:.82rem;color:var(--muted)}
+.form{display:grid;gap:10px;margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
+.form label{font-size:.86rem;color:var(--muted)}
+.form .field{border-radius:12px;width:100%}
+.sugs{display:flex;flex-wrap:wrap;gap:6px}
+
+/* Species dialog */
+dialog{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:20px;padding:0;width:min(720px,calc(100vw - 24px));max-height:calc(100dvh - 40px)}
+dialog::backdrop{background:rgba(3,8,6,.75)}
+.dlg{display:grid;gap:14px;padding:22px;overflow:auto;max-height:calc(100dvh - 42px)}
+.dlg .x{justify-self:end;margin:-6px -6px 0 0}
+.gallery{display:grid;grid-template-columns:2fr 1fr;gap:8px}
+.gallery img{width:100%;height:100%;object-fit:cover;border-radius:12px;aspect-ratio:1}
+.gallery .side{display:grid;gap:8px}
+.wiki{color:#d6ddd2;max-width:65ch}
+footer{color:var(--faint);font-size:.84rem;padding-block:24px 40px;border-top:1px solid var(--line)}
+footer .wrap{display:grid;gap:4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <div class="eyebrow">Field identification</div>
-    <h1>Native <span>Nature</span></h1>
-    <p class="sub">Snap or upload a photo of any plant or animal. Plants are identified with Pl@ntNet, animals with Claude, and species details come from iNaturalist.</p>
-  </header>
 
-  <section class="bench">
-    <div class="tray">
-      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a photo">
-        <div class="hint" id="hint"><b>Drop a photo here</b>or tap to take or choose one</div>
-        <img id="preview" alt="Your photo" hidden>
-      </div>
-      <input id="file" type="file" accept="image/*" hidden>
-      <label class="small" for="where">Where did you see it? (optional, helps accuracy)</label>
-      <textarea id="where" placeholder="e.g. backyard in Leander, TX, at night, on a live oak trunk"></textarea>
-      <div class="loc" id="loc">
-        <div class="loc-head"><span class="eyebrow">Your location</span><b id="locName">Not set</b>
-          <span class="small" id="locHint">Share your location to see if each species is native or invasive where you are.</span></div>
-        <div class="row">
-          <button type="button" id="locBtn">Use my location</button>
-          <form id="cityForm" class="row city"><label for="city" class="sr">City</label><input id="city" placeholder="or type a city" autocomplete="off"><button type="submit">Set</button></form>
-        </div>
-        <div class="row" id="cityResults"></div>
-      </div>
-      <div class="row">
-        <button class="primary" id="go" disabled>Identify</button>
-        <button id="pick">New photo</button>
-      </div>
-      <ol class="steps" id="steps" hidden></ol>
-      <div class="status" id="status" aria-live="polite"></div>
-    </div>
-    <article class="label" id="label" aria-live="polite"></article>
-  </section>
+<header class="hero gut">
+  <h1>Native Nature</h1>
+  <p class="tag">Native plants, wildlife, and invasive species, anywhere on Earth</p>
+  <div class="stats" aria-label="Your Camera Record">
+    <div class="stat"><b id="sSight">0</b><span>Sightings</span></div>
+    <div class="stat"><b id="sSpecies">0</b><span>Species</span></div>
+    <div class="stat"><b id="sNative">0</b><span>Native</span></div>
+    <div class="stat"><b id="sInvasive">0</b><span>Not native</span></div>
+  </div>
+  <button class="cta" id="heroCta" type="button"><span aria-hidden="true">📷</span> Identify a species from a photo</button>
+</header>
 
-  <section class="log">
-    <h2>Your field log</h2>
-    <ul id="log"></ul>
-    <p class="small" id="logEmpty">Species you identify show up here. They're saved in this browser only.</p>
-  </section>
-
-  <footer>
-    <span>Plant IDs powered by <a href="https://plantnet.org" target="_blank" rel="noopener">Pl@ntNet</a>. Species data and photos from <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a>. Animal IDs by Claude.</span>
-    <span>AI identification can be wrong. Never eat, touch or handle a wild plant, mushroom or animal based on an app alone.</span>
-  </footer>
+<div class="bar">
+  <nav class="tabs gut" role="tablist" aria-label="Tools">
+    <button class="tab" role="tab" data-tab="map">World Map</button>
+    <button class="tab" role="tab" data-tab="photo">✨ Photo ID</button>
+    <button class="tab" role="tab" data-tab="bloom">In Bloom Now</button>
+    <button class="tab" role="tab" data-tab="search">Identify a Species</button>
+    <button class="tab" role="tab" data-tab="key">Guided ID Key</button>
+    <button class="tab" role="tab" data-tab="record">Camera Record</button>
+  </nav>
 </div>
 
-<script>
-const $ = (id) => document.getElementById(id);
-const drop = $("drop"), file = $("file"), preview = $("preview"), hint = $("hint"), go = $("go"),
-      statusEl = $("status"), label = $("label"), where = $("where"), stepsEl = $("steps");
-let photo = null; // { blob, base64, mediaType, url }
-let log = [];
+<div class="gut" style="border-bottom:1px solid var(--line)">
+  <div class="locbar">
+    <div class="where"><span class="eyebrow">📍 Your location</span><b id="locName">Not set</b><span class="small" id="locHint"></span></div>
+    <button class="btn" type="button" id="locBtn">Use my location</button>
+    <form class="city" id="cityForm"><label class="sr" for="city">City</label><input class="field" id="city" placeholder="or type a city" autocomplete="off"><button class="btn" type="submit">Set</button></form>
+    <div class="row" id="cityResults" style="flex-basis:100%"></div>
+  </div>
+</div>
 
-const EXAMPLE = {
-  example: true, group: "plant", category: "Flower", common_name: "Texas Bluebonnet", scientific_name: "Lupinus texensis",
-  confidence: 94, source: "Pl@ntNet", status: "native", statusPlace: "Texas", statusSource: "iNaturalist",
-  taxonomy: { kingdom: "Plantae", class: "Magnoliopsida", order: "Fabales", family: "Fabaceae", genus: "Lupinus" },
-  key_features: ["Spikes of blue pea-shaped flowers with white tips", "Palm-shaped leaves with 5 leaflets", "Grows 30 to 45 cm tall in spring"],
-  habitat: "Open fields, roadsides and prairies across central Texas; blooms March to April.",
-  fun_fact: "It is the state flower of Texas, and the white spot on each flower turns reddish purple after it has been pollinated.",
-  safety: "Seeds are toxic if eaten; keep them away from pets and small kids.",
-  similar: ["Sandyland bluebonnet", "Big Bend bluebonnet"]
-};
+<main class="gut"><div class="wrap">
 
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const fmt = (n) => Number(n).toLocaleString();
-function setStatus(msg, err) { statusEl.textContent = msg || ""; statusEl.classList.toggle("err", !!err); }
-
-/* ---------- Result card ---------- */
-function render(r) {
-  if (!r) { label.innerHTML = ""; return; }
-  const t = r.taxonomy || {}, conf = Math.max(0, Math.min(100, Number(r.confidence) || 0)), inat = r.inat;
-  const rows = [["Kingdom", t.kingdom], ["Class", t.class], ["Order", t.order], ["Family", t.family], ["Genus", t.genus]]
-    .filter(([, v]) => v).map(([k, v]) => `<dt>${k}</dt><dd>${k === "Genus" ? `<i>${esc(v)}</i>` : esc(v)}</dd>`).join("");
-  const mine = r.thumb || (r.example ? "" : photo?.url);
-  label.innerHTML = `
-    <div class="label-top">
-      <div class="chips"><span class="chip">${esc(r.category || "Organism")}</span>
-        ${r.source ? `<span class="chip src">ID by ${esc(r.source)}</span>` : ""}</div>
-      ${r.example ? '<span class="chip ex">Example result</span>' : `<span class="eyebrow">${esc(r.date || "")}</span>`}
+  <!-- WORLD MAP -->
+  <section class="panel" id="p-map" role="tabpanel">
+    <div class="split">
+      <div class="card">
+        <form class="city" id="mapForm"><label class="sr" for="mapQ">Search a place</label><input class="field" id="mapQ" placeholder="Search any city worldwide" autocomplete="off"><button class="btn primary" type="submit">Search</button></form>
+        <div class="row" id="mapResults" style="margin-top:10px"></div>
+        <div class="row" style="margin-top:10px"><button class="btn sm" type="button" id="mapReset">Reset</button><button class="btn sm" type="button" id="mapMine">Go to my location</button></div>
+        <div id="map" role="application" aria-label="World map. Tap a spot to see what lives there."></div>
+      </div>
+      <div class="card" id="mapPanel">
+        <p class="lead" style="margin:0">Tap anywhere on the map, or search a place, to see what grows and lives there.</p>
+      </div>
     </div>
-    <div><h2 class="common">${esc(r.common_name || "Unknown")}</h2>
-      ${r.scientific_name ? `<p class="sci">${esc(r.scientific_name)}</p>` : ""}</div>
-    ${statusBox(r)}
-    ${inat?.photo && mine ? `<div class="compare">
-      <figure><img src="${esc(mine)}" alt="Your photo"><figcaption>Your photo</figcaption></figure>
-      <figure><img src="${esc(inat.photo)}" alt="Reference photo of ${esc(r.common_name)}"><figcaption>iNaturalist reference${inat.photoCredit ? ` · ${esc(inat.photoCredit)}` : ""}</figcaption></figure>
-    </div>` : ""}
-    <div class="conf"><div class="eyebrow">${r.source === "Pl@ntNet" ? "Pl@ntNet match" : "Confidence"} · ${conf}%</div><div class="bar"><i style="width:${conf}%"></i></div></div>
-    ${r.note ? `<p class="note">${esc(r.note)}</p>` : ""}
-    ${rows ? `<dl class="taxa">${rows}</dl>` : ""}
-    ${inat ? `<div class="stats">
-      <div><b>${fmt(inat.observations || 0)}</b><span>sightings on iNaturalist</span></div>
-      ${inat.nearby != null ? `<div><b>${fmt(inat.nearby)}</b><span>within 50 km of ${esc(r.placeLabel || "you")}</span></div>` : ""}
-      ${inat.conservation ? `<div><b>${esc(inat.conservation)}</b><span>conservation status</span></div>` : ""}
-    </div>` : ""}
-    ${r.safety && !/^none\b/i.test(r.safety) ? `<div class="safety">⚠ ${esc(r.safety)}</div>` : ""}
-    ${Array.isArray(r.key_features) && r.key_features.length ? `<div class="sec"><h3>How to tell</h3><ul>${r.key_features.map((f) => `<li>${esc(f)}</li>`).join("")}</ul></div>` : ""}
-    ${r.habitat ? `<div class="sec"><h3>Habitat and range</h3><p>${esc(r.habitat)}</p></div>` : ""}
-    ${r.fun_fact ? `<div class="sec"><h3>Fun fact</h3><p>${esc(r.fun_fact)}</p></div>` : ""}
-    ${Array.isArray(r.similar) && r.similar.length ? `<p class="alts">Could also be: ${r.similar.map(esc).join(", ")}</p>` : ""}
-    ${inat?.url ? `<a href="${esc(inat.url)}" target="_blank" rel="noopener">See ${esc(r.common_name)} on iNaturalist →</a>` : ""}`;
-}
+  </section>
 
-/* ---------- Picking a photo ---------- */
-async function shrink(f) {
-  // Resize to at most 1568 px on the long side and re-encode as JPEG to keep uploads small.
-  const bmp = await createImageBitmap(f, { imageOrientation: "from-image" });
-  const scale = Math.min(1, 1568 / Math.max(bmp.width, bmp.height));
-  const c = document.createElement("canvas");
-  c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
-  c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
-  const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", 0.85));
-  const base64 = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result.split(",")[1]); fr.readAsDataURL(blob); });
-  return { blob, base64, mediaType: "image/jpeg", url: URL.createObjectURL(blob) };
-}
-async function choose(f) {
-  if (!f) return;
-  if (!f.type.startsWith("image/")) { setStatus("That file isn't a photo. Choose a JPG, PNG or HEIC image.", true); return; }
-  try {
-    setStatus("Preparing photo…");
-    photo = await shrink(f);
-    preview.src = photo.url; preview.hidden = false; hint.hidden = true;
-    go.disabled = false; setStatus("Photo ready. Tap Identify.");
-  } catch {
-    setStatus("This browser couldn't open that photo. Try a JPG or PNG.", true);
-  }
-}
-drop.onclick = () => file.click();
-$("pick").onclick = () => file.click();
-drop.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); file.click(); } };
-file.onchange = () => choose(file.files[0]);
-["dragover", "dragenter"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
-["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, () => drop.classList.remove("over")));
-drop.addEventListener("drop", (e) => { e.preventDefault(); choose(e.dataTransfer.files[0]); });
-document.addEventListener("paste", (e) => { const f = [...(e.clipboardData?.files || [])][0]; if (f) choose(f); });
+  <!-- PHOTO ID -->
+  <section class="panel" id="p-photo" role="tabpanel">
+    <div class="split">
+      <div class="card tray">
+        <h2 class="h">Photo ID</h2>
+        <p class="lead" style="margin:0">Plants are checked by Pl@ntNet, animals by Claude, and details come from iNaturalist.</p>
+        <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a photo">
+          <div class="hint" id="hint"><b>Drop a photo here</b>or tap to take or choose one</div>
+          <img id="preview" alt="Your photo" hidden>
+        </div>
+        <input id="file" type="file" accept="image/*" hidden>
+        <label class="small" for="where">Where did you see it? (optional)</label>
+        <textarea class="field" id="where" placeholder="e.g. on a live oak trunk, at night"></textarea>
+        <div class="row"><button class="btn primary" id="go" disabled>Identify</button><button class="btn" id="pick">New photo</button></div>
+        <ol class="steps" id="steps" hidden></ol>
+        <div class="status" id="status" aria-live="polite"></div>
+      </div>
+      <article class="card label" id="label" aria-live="polite"></article>
+    </div>
+  </section>
 
-/* ---------- Calls ---------- */
-async function api(path, body) {
-  const res = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || (res.status === 504 ? "The server took too long. Try again." : "Something went wrong. Try again."));
-  return data;
-}
+  <!-- IN BLOOM -->
+  <section class="panel" id="p-bloom" role="tabpanel">
+    <div class="card">
+      <h2 class="h">In Bloom Now</h2>
+      <p class="lead" id="bloomLead">Plants that people have photographed flowering near you in the last 30 days.</p>
+      <div class="status" id="bloomStatus"></div>
+      <div class="tiles" id="bloomTiles"></div>
+    </div>
+  </section>
 
-const sameSpecies = (a, b) => (a || "").toLowerCase().split(/\s+/).slice(0, 2).join(" ") === (b || "").toLowerCase().split(/\s+/).slice(0, 2).join(" ");
+  <!-- SEARCH -->
+  <section class="panel" id="p-search" role="tabpanel">
+    <div class="card">
+      <h2 class="h">Identify a Species</h2>
+      <p class="lead">Know the name, or part of it? Search any plant or animal to see photos, facts, and whether it's native where you live.</p>
+      <form class="city" id="searchForm" style="max-width:620px"><label class="sr" for="searchQ">Species name</label><input class="field" id="searchQ" placeholder="e.g. bluebonnet, cardinal, Anolis" autocomplete="off"><button class="btn primary" type="submit">Search</button></form>
+      <div class="status" id="searchStatus" style="margin-top:10px"></div>
+      <div class="tiles" id="searchTiles" style="margin-top:12px"></div>
+    </div>
+  </section>
 
-/* ---------- Location (asked once, remembered in this browser) ---------- */
+  <!-- GUIDED KEY -->
+  <section class="panel" id="p-key" role="tabpanel">
+    <div class="card">
+      <h2 class="h">Guided ID Key</h2>
+      <p class="lead">Answer a few yes or no questions about what you saw. We'll narrow it down and show the matching species seen near you.</p>
+      <ul class="trail" id="trail"></ul>
+      <div id="keyBody"></div>
+    </div>
+  </section>
+
+  <!-- CAMERA RECORD -->
+  <section class="panel" id="p-record" role="tabpanel">
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div><h2 class="h">Camera Record</h2><p class="lead" style="margin:0">Every sighting you identify or add is kept here, in this browser.</p></div>
+        <div class="row"><button class="btn" type="button" id="recAdd">Add a sighting</button><button class="btn" type="button" id="recExport">Export CSV</button></div>
+      </div>
+      <form class="form" id="recForm" hidden>
+        <label for="recName">What did you see?</label>
+        <input class="field" id="recName" placeholder="Start typing a species name" autocomplete="off" required>
+        <div class="sugs" id="recSugs"></div>
+        <div class="row">
+          <div style="flex:1 1 120px"><label for="recCount">How many?</label><input class="field" id="recCount" type="number" min="1" value="1"></div>
+          <div style="flex:2 1 200px"><label for="recPhoto">Photo (optional)</label><input class="field" id="recPhoto" type="file" accept="image/*"></div>
+        </div>
+        <label for="recNotes">Notes (optional)</label>
+        <textarea class="field" id="recNotes" placeholder="e.g. 3 bats flying over the creek at dusk"></textarea>
+        <div class="row"><button class="btn primary" type="submit">Save sighting</button><button class="btn" type="button" id="recCancel">Cancel</button><span class="small" id="recMsg"></span></div>
+      </form>
+      <div class="recs" id="recs" style="margin-top:18px"></div>
+      <p class="empty" id="recEmpty">No sightings yet. Identify a photo or tap <b>Add a sighting</b> to start your record.</p>
+    </div>
+  </section>
+
+</div></main>
+
+<dialog id="dlg" aria-label="Species details"><div class="dlg" id="dlgBody"></div></dialog>
+
+<footer class="gut"><div class="wrap">
+  <span>Species data and photos from <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a>. Plant photo IDs by <a href="https://plantnet.org" target="_blank" rel="noopener">Pl@ntNet</a>, animal photo IDs by Claude. Map imagery © Esri. City search by Open-Meteo.</span>
+  <span>AI identification can be wrong. Never eat, touch or handle a wild plant or animal based on an app alone.</span>
+</div></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* =========================================================
+   Helpers
+   ========================================================= */
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = (n) => Number(n || 0).toLocaleString();
 const INAT = "https://api.inaturalist.org/v1";
-let loc = null; // { lat, lng, label, places: [{ id, name, level }] }
-try { loc = JSON.parse(localStorage.getItem("nn-loc") || "null"); } catch {}
+const ANIMALS = "Aves,Mammalia,Reptilia,Amphibia,Actinopterygii,Insecta,Arachnida,Mollusca";
+const KEEP = new Set(["Plantae", ...ANIMALS.split(","), "Animalia"]);
+const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } } };
+
+const cache = new Map();
+async function getJSON(url) {
+  if (cache.has(url)) return cache.get(url);
+  const p = fetch(url).then((r) => { if (!r.ok) throw new Error("iNaturalist didn't answer. Try again in a moment."); return r.json(); });
+  cache.set(url, p); p.catch(() => cache.delete(url));
+  return p;
+}
+const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
+function setMsg(el, msg, err) { el.textContent = msg || ""; el.classList.toggle("err", !!err); }
+
+/* =========================================================
+   Tabs
+   ========================================================= */
+const TABS = ["map", "photo", "bloom", "search", "key", "record"];
+const opened = new Set();
+function showTab(t) {
+  if (!TABS.includes(t)) t = "map";
+  document.querySelectorAll(".tab").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === t));
+  document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("on", p.id === "p-" + t));
+  try { history.replaceState(null, "", "#" + t); } catch {}
+  if (t === "map") initMap();
+  if (t === "bloom") loadBloom();
+  if (t === "key" && !opened.has("key")) keyStart();
+  opened.add(t);
+}
+document.querySelectorAll(".tab").forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
+$("heroCta").onclick = () => { showTab("photo"); document.querySelector(".bar").scrollIntoView({ behavior: "smooth" }); };
+
+/* =========================================================
+   Location (asked once, remembered in this browser)
+   ========================================================= */
+let loc = store.get("nn-loc", null); // { lat, lng, label, places:[{id,name,short,level}] }
+const locListeners = [];
 
 function showLoc(msg) {
   $("locName").textContent = loc ? loc.label : "Not set";
-  $("locHint").textContent = msg || (loc
-    ? "Each result shows whether the species is native or invasive here."
-    : "Share your location to see if each species is native or invasive where you are.");
+  $("locHint").textContent = msg ?? (loc ? "Results show whether each species is native or invasive here." : "Share your location to see what's native or invasive where you are.");
   $("locBtn").textContent = loc ? "Update my location" : "Use my location";
 }
-
-// The iNaturalist places (county, state, country…) that contain this point, most specific first.
 async function placesAt(lat, lng) {
   const d = 0.005;
-  const res = await fetch(`${INAT}/places/nearby?nelat=${lat + d}&nelng=${lng + d}&swlat=${lat - d}&swlng=${lng - d}&per_page=50`);
-  const data = await res.json();
-  return (data.results?.standard || [])
-    .filter((p) => p.admin_level != null)
+  const data = await getJSON(`${INAT}/places/nearby?nelat=${lat + d}&nelng=${lng + d}&swlat=${lat - d}&swlng=${lng - d}&per_page=50`);
+  return (data.results?.standard || []).filter((p) => p.admin_level != null)
     .sort((a, b) => b.admin_level - a.admin_level)
     .map((p) => ({ id: p.id, name: p.display_name || p.name, short: (p.display_name || p.name).split(",")[0], level: p.admin_level }));
 }
-
 async function setLocation(lat, lng, label) {
-  lat = Math.round(lat * 100) / 100; lng = Math.round(lng * 100) / 100; // ~1 km, enough for this
+  lat = Math.round(lat * 100) / 100; lng = Math.round(lng * 100) / 100;
   showLoc("Finding your area…");
   let places = [];
   try { places = await placesAt(lat, lng); } catch {}
   const best = places.find((p) => p.level <= 20) || places[0];
   loc = { lat, lng, label: label || best?.name || `${lat}, ${lng}`, places: places.slice(0, 4) };
-  try { localStorage.setItem("nn-loc", JSON.stringify(loc)); } catch {}
-  showLoc(places.length ? "" : "Couldn't match this spot to a region, so native status may be missing.");
+  store.set("nn-loc", loc);
+  showLoc(places.length ? undefined : "Couldn't match this spot to a region, so native status may be missing.");
+  locListeners.forEach((f) => f());
 }
-
 function askLocation() {
   if (!navigator.geolocation) { showLoc("This browser can't share location. Type your city instead."); return; }
   showLoc("Waiting for you to allow location…");
   navigator.geolocation.getCurrentPosition(
     (p) => setLocation(p.coords.latitude, p.coords.longitude),
-    (e) => showLoc(e.code === 1 ? "Location was blocked. Type your city instead, or allow location in your browser settings." : "Couldn't get your location. Type your city instead."),
+    (e) => showLoc(e.code === 1 ? "Location was blocked. Type your city instead." : "Couldn't get your location. Type your city instead."),
     { timeout: 10000, maximumAge: 600000 });
 }
 $("locBtn").onclick = askLocation;
 
-$("cityForm").onsubmit = async (e) => {
-  e.preventDefault();
-  const q = $("city").value.trim(); const out = $("cityResults"); out.innerHTML = "";
-  if (!q) return;
-  try {
-    const data = await (await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=en&format=json`)).json();
-    if (!data.results?.length) { showLoc(`No place called "${q}" was found. Check the spelling.`); return; }
-    data.results.forEach((c) => {
-      const b = document.createElement("button"); b.type = "button";
-      const name = [c.name, c.admin1, c.country].filter(Boolean).join(", ");
-      b.textContent = name;
-      b.onclick = () => { out.innerHTML = ""; $("city").value = ""; setLocation(c.latitude, c.longitude, name); };
-      out.append(b);
-    });
-  } catch { showLoc("Couldn't search for that city. Check your internet connection."); }
-};
+async function geocode(q) {
+  const data = await getJSON(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=en&format=json`);
+  return (data.results || []).map((c) => ({ lat: c.latitude, lng: c.longitude, name: [c.name, c.admin1, c.country].filter(Boolean).join(", ") }));
+}
+function cityPicker(form, input, out, onPick, onNone) {
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const q = input.value.trim(); out.innerHTML = ""; if (!q) return;
+    try {
+      const list = await geocode(q);
+      if (!list.length) return onNone(`No place called "${q}" was found. Check the spelling.`);
+      list.forEach((c) => {
+        const b = document.createElement("button"); b.type = "button"; b.className = "btn"; b.textContent = c.name;
+        b.onclick = () => { out.innerHTML = ""; input.value = ""; onPick(c); };
+        out.append(b);
+      });
+    } catch { onNone("Couldn't search for that place. Check your internet connection."); }
+  };
+}
+cityPicker($("cityForm"), $("city"), $("cityResults"), (c) => setLocation(c.lat, c.lng, c.name), (m) => showLoc(m));
 
-// Ask on first visit, unless the browser already blocked it.
-showLoc();
-(async () => {
-  if (loc) return;
-  try {
-    const p = await navigator.permissions?.query({ name: "geolocation" });
-    if (p?.state === "denied") { showLoc("Location is blocked in this browser. Type your city instead."); return; }
-  } catch {}
-  askLocation();
-})();
-
-// Native or introduced, from iNaturalist's checklists for the places around you.
+/* Native or introduced, from iNaturalist's checklists for the places around you. */
 async function nativeStatus(taxonId) {
   if (!loc?.places?.length) return null;
-  const count = async (placeId, flag) => {
-    const d = await (await fetch(`${INAT}/observations?taxon_id=${taxonId}&place_id=${placeId}&${flag}=true&per_page=0`)).json();
-    return d.total_results || 0;
-  };
+  const count = async (pid, flag) => (await getJSON(`${INAT}/observations?taxon_id=${taxonId}&place_id=${pid}&${flag}=true&per_page=0`)).total_results || 0;
   const checks = await Promise.all(loc.places.slice(0, 3).map(async (p) => {
     try { const [intro, nat] = await Promise.all([count(p.id, "introduced"), count(p.id, "native")]); return { p, intro, nat }; }
     catch { return { p, intro: 0, nat: 0 }; }
@@ -353,76 +427,439 @@ async function nativeStatus(taxonId) {
   }
   return null;
 }
-
-function statusBox(r) {
-  if (!r.status) return "";
-  const where = esc(r.statusPlace || r.placeLabel || "your area");
+function statusBox(s) {
+  if (!s?.status) return "";
+  const w = esc(s.place || loc?.label || "your area");
   const t = {
-    native: ["Native", `Native to ${where}`],
-    introduced: ["Not native", `Introduced to ${where}. It came from somewhere else.`],
-    invasive: ["Invasive", `Invasive in ${where}. It can harm local plants and wildlife.`],
-    unknown: ["Status unknown", `There's no record of whether it's native to ${where}.`]
-  }[r.status] || ["Status unknown", ""];
-  const src = r.statusSource ? ` <span class="small">(${esc(r.statusSource)})</span>` : "";
-  return `<div class="native is-${esc(r.status)}"><b>${t[0]}</b><span>${t[1]}${r.statusNote ? ` ${esc(r.statusNote)}` : ""}${src}</span></div>`;
+    native: ["Native", `Native to ${w}`],
+    introduced: ["Not native", `Introduced to ${w}. It came from somewhere else.`],
+    invasive: ["Invasive", `Invasive in ${w}. It can harm local plants and wildlife.`],
+    unknown: ["Status unknown", `There's no record of whether it's native to ${w}.`]
+  }[s.status] || ["Status unknown", ""];
+  return `<div class="nat ${esc(s.status)}"><b>${t[0]}</b><span>${t[1]}${s.note ? " " + esc(s.note) : ""}${s.source ? ` <span class="small">(${esc(s.source)})</span>` : ""}</span></div>`;
 }
 
+/* =========================================================
+   Species tiles + detail dialog (shared by every tab)
+   ========================================================= */
+function tileData(t, count) {
+  return { id: t.id, name: t.name, common: t.preferred_common_name || t.name, photo: t.default_photo?.square_url || t.default_photo?.url || "", count, iconic: t.iconic_taxon_name };
+}
+async function speciesCounts(params, n = 24) {
+  const q = new URLSearchParams({ verifiable: "true", per_page: String(n), ...params });
+  const d = await getJSON(`${INAT}/observations/species_counts?${q}`);
+  return (d.results || []).filter((r) => KEEP.has(r.taxon?.iconic_taxon_name)).map((r) => tileData(r.taxon, r.count));
+}
+function tiles(list, countLabel = "sightings") {
+  if (!list.length) return `<p class="empty">Nothing recorded here yet.</p>`;
+  return `<div class="tiles">${tilesInner(list, countLabel)}</div>`;
+}
+function tilesInner(list, countLabel = "sightings") {
+  return `${list.map((s) => `<button class="tile" type="button" data-taxon="${s.id}">
+      <span class="ph" style="background-image:url('${esc(s.photo)}')"></span>
+      <b>${esc(s.common)}</b>${s.common !== s.name ? `<i>${esc(s.name)}</i>` : ""}
+      ${s.count != null ? `<small>${fmt(s.count)} ${countLabel}</small>` : ""}
+    </button>`).join("")}`;
+}
+document.addEventListener("click", (e) => { const t = e.target.closest("[data-taxon]"); if (t) openSpecies(Number(t.dataset.taxon)); });
+
+const dlg = $("dlg"), dlgBody = $("dlgBody");
+const closeBtn = `<button class="btn sm x" type="button" onclick="dlg.close()">Close</button>`;
+async function openSpecies(id) {
+  dlgBody.innerHTML = `${closeBtn}<p class="small">Loading…</p>`;
+  if (!dlg.open) dlg.showModal();
+  try {
+    const t = (await getJSON(`${INAT}/taxa/${id}`)).results?.[0];
+    if (!t) throw new Error();
+    const photos = (t.taxon_photos || []).slice(0, 3).map((p) => p.photo);
+    if (!photos.length && t.default_photo) photos.push(t.default_photo);
+    const big = (p) => p?.medium_url || p?.url || "";
+    const chain = [...(t.ancestors || []), t];
+    const rank = (r) => chain.find((a) => a.rank === r)?.name;
+    const rows = [["Kingdom", rank("kingdom")], ["Class", rank("class")], ["Order", rank("order")], ["Family", rank("family")], ["Genus", rank("genus")]].filter(([, v]) => v);
+    const summary = (t.wikipedia_summary || "").replace(/<[^>]+>/g, "").trim();
+    const common = t.preferred_common_name || t.name;
+    dlgBody.innerHTML = `${closeBtn}
+      <div><h2 class="common">${esc(common)}</h2>${common !== t.name ? `<p class="sci">${esc(t.name)}</p>` : ""}</div>
+      ${photos.length ? `<div class="gallery"><img src="${esc(big(photos[0]))}" alt="${esc(common)}">${photos.length > 1 ? `<div class="side">${photos.slice(1).map((p) => `<img src="${esc(big(p))}" alt="">`).join("")}</div>` : ""}</div>
+        <p class="small" style="margin:-6px 0 0">${esc(photos[0].attribution || "")}</p>` : ""}
+      <div id="dlgStatus">${loc ? `<p class="small">Checking if it's native to ${esc(loc.label)}…</p>` : `<p class="small">Set your location above to see if it's native where you live.</p>`}</div>
+      ${summary ? `<p class="wiki">${esc(summary)}</p>` : ""}
+      <div class="nums"><div><b>${fmt(t.observations_count)}</b><span>sightings on iNaturalist</span></div>
+        ${t.conservation_status?.status_name ? `<div><b>${esc(t.conservation_status.status_name)}</b><span>conservation status</span></div>` : ""}</div>
+      ${rows.length ? `<dl class="taxa">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${k === "Genus" ? `<i>${esc(v)}</i>` : esc(v)}</dd>`).join("")}</dl>` : ""}
+      <div class="row"><button class="btn primary" type="button" id="dlgRec">Add to Camera Record</button>
+        <a class="btn" href="https://www.inaturalist.org/taxa/${t.id}" target="_blank" rel="noopener" style="text-decoration:none">View on iNaturalist</a></div>`;
+    let st = null;
+    $("dlgRec").onclick = () => {
+      addRecord({ name: common, sci: t.name, taxonId: t.id, group: t.iconic_taxon_name === "Plantae" ? "plant" : "animal", status: st?.status, statusPlace: st?.place, thumb: t.default_photo?.square_url || "", source: "Added" });
+      $("dlgRec").textContent = "Added ✓"; $("dlgRec").disabled = true;
+    };
+    if (loc) {
+      st = await nativeStatus(t.id).catch(() => null);
+      if ($("dlgStatus")) $("dlgStatus").innerHTML = st ? statusBox({ ...st, source: "iNaturalist" }) : statusBox({ status: "unknown" });
+    }
+  } catch {
+    dlgBody.innerHTML = `${closeBtn}<p class="status err">Couldn't load this species. Check your internet connection and try again.</p>`;
+  }
+}
+dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
+
+/* =========================================================
+   World Map
+   ========================================================= */
+let map, marker;
+function initMap() {
+  if (map || !window.L) { if (!window.L) $("map").innerHTML = `<p class="empty">The map couldn't load. Check your internet connection.</p>`; return; }
+  map = L.map("map", { worldCopyJump: true, zoomControl: true }).setView(loc ? [loc.lat, loc.lng] : [20, 0], loc ? 6 : 2);
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 18, attribution: "Imagery © Esri" }).addTo(map);
+  map.on("click", (e) => explore(e.latlng.lat, ((e.latlng.lng + 540) % 360) - 180));
+}
+cityPicker($("mapForm"), $("mapQ"), $("mapResults"), (c) => explore(c.lat, c.lng, c.name), (m) => { $("mapPanel").innerHTML = `<p class="status err">${esc(m)}</p>`; });
+$("mapReset").onclick = () => { if (marker) { marker.remove(); marker = null; } map?.setView([20, 0], 2); $("mapPanel").innerHTML = `<p class="lead" style="margin:0">Tap anywhere on the map, or search a place, to see what grows and lives there.</p>`; };
+$("mapMine").onclick = () => { if (loc) explore(loc.lat, loc.lng, loc.label); else askLocation(); };
+
+let exploreRun = 0;
+async function explore(lat, lng, label) {
+  const run = ++exploreRun;
+  if (map) { if (marker) marker.setLatLng([lat, lng]); else marker = L.marker([lat, lng]).addTo(map); map.setView([lat, lng], Math.max(map.getZoom(), 7)); }
+  const panel = $("mapPanel");
+  panel.innerHTML = `<p class="small">Looking up what lives here…</p>`;
+  try {
+    const places = await placesAt(lat, lng);
+    if (run !== exploreRun) return;
+    const place = places.find((p) => p.level <= 20) || places[0];
+    const name = label || place?.name || `${lat.toFixed(2)}, ${lng.toFixed(2)}`;
+    let sections;
+    if (place) {
+      const [plants, animals, intro] = await Promise.all([
+        speciesCounts({ place_id: place.id, native: "true", iconic_taxa: "Plantae" }, 12),
+        speciesCounts({ place_id: place.id, native: "true", iconic_taxa: ANIMALS }, 12),
+        speciesCounts({ place_id: place.id, introduced: "true", iconic_taxa: "Plantae," + ANIMALS }, 12)
+      ]);
+      sections = [["Native plants", "var(--native)", plants], ["Native wildlife", "var(--native)", animals], ["Introduced and invasive", "var(--invasive)", intro]];
+    } else {
+      const ll = { lat, lng, radius: "50" };
+      const [plants, animals] = await Promise.all([speciesCounts({ ...ll, iconic_taxa: "Plantae" }, 12), speciesCounts({ ...ll, iconic_taxa: ANIMALS }, 12)]);
+      sections = [["Plants seen here", "var(--green)", plants], ["Wildlife seen here", "var(--green)", animals]];
+    }
+    if (run !== exploreRun) return;
+    panel.innerHTML = `<span class="eyebrow">${place ? "Region" : "Within 50 km"}</span><h2 class="h">${esc(name)}</h2>
+      <div class="row"><button class="btn sm" type="button" id="useHere">Set as my location</button></div>
+      ${sections.map(([h, c, list]) => `<div class="group"><h3><span class="dot" style="background:${c}"></span>${h}</h3>${tiles(list)}</div>`).join("")}
+      ${place ? "" : `<p class="small" style="margin-top:14px">This spot isn't inside a mapped region, so native status isn't available.</p>`}`;
+    $("useHere").onclick = () => { setLocation(lat, lng, label); $("useHere").textContent = "Location set ✓"; };
+  } catch (e) {
+    if (run === exploreRun) panel.innerHTML = `<p class="status err">${esc(e.message || "Couldn't load this place. Try again.")}</p>`;
+  }
+}
+
+/* =========================================================
+   In Bloom Now
+   ========================================================= */
+let bloomFor = "";
+async function loadBloom(force) {
+  const st = $("bloomStatus"), out = $("bloomTiles");
+  if (!loc) { setMsg(st, "Set your location above to see what's flowering near you."); out.innerHTML = ""; bloomFor = ""; return; }
+  const key = `${loc.lat},${loc.lng}`;
+  if (bloomFor === key && !force) return;
+  bloomFor = key;
+  $("bloomLead").textContent = `Plants people have photographed flowering within 50 km of ${loc.label}.`;
+  setMsg(st, "Finding flowers…"); out.innerHTML = "";
+  try {
+    const base = { lat: loc.lat, lng: loc.lng, radius: "50", iconic_taxa: "Plantae", term_id: "12", term_value_id: "13" };
+    let list = await speciesCounts({ ...base, d1: daysAgo(30) }, 36), span = "the last 30 days";
+    if (list.length < 6) { list = await speciesCounts({ ...base, d1: daysAgo(90) }, 36); span = "the last 3 months"; }
+    setMsg(st, list.length ? `${list.length} species flowering in ${span}. Tap one for details.` : "No flowering plants have been recorded near you recently. Try again in spring!");
+    out.innerHTML = tilesInner(list, "flowering sightings");
+  } catch (e) { setMsg(st, e.message, true); bloomFor = ""; }
+}
+locListeners.push(() => { if ($("p-bloom").classList.contains("on")) loadBloom(true); else bloomFor = ""; });
+
+/* =========================================================
+   Identify a Species (search)
+   ========================================================= */
+let searchT;
+async function runSearch(q) {
+  const st = $("searchStatus"), out = $("searchTiles");
+  if (q.length < 2) { setMsg(st, ""); out.innerHTML = ""; return; }
+  setMsg(st, "Searching…");
+  try {
+    const d = await getJSON(`${INAT}/taxa/autocomplete?q=${encodeURIComponent(q)}&per_page=20&is_active=true`);
+    const list = (d.results || []).filter((t) => KEEP.has(t.iconic_taxon_name)).map((t) => tileData(t, t.observations_count));
+    setMsg(st, list.length ? "Tap a species to see details." : `No plants or animals match "${q}".`);
+    out.innerHTML = tilesInner(list);
+  } catch (e) { setMsg(st, e.message, true); }
+}
+$("searchQ").oninput = (e) => { clearTimeout(searchT); searchT = setTimeout(() => runSearch(e.target.value.trim()), 350); };
+$("searchForm").onsubmit = (e) => { e.preventDefault(); clearTimeout(searchT); runSearch($("searchQ").value.trim()); };
+
+/* =========================================================
+   Guided ID Key
+   ========================================================= */
+const end = (label, taxon, rank) => ({ end: label, taxon, rank });
+const KEY = {
+  q: "Is it a plant?", yes: "plant", no: "animal",
+  plant: { q: "Does it have needles or cones?", yes: end("Conifers (pines, cedars, junipers)", "Pinopsida", "class"),
+    no: { q: "Does it have feathery fronds and no flowers?", yes: end("Ferns", "Polypodiopsida", "class"),
+      no: { q: "Is it a tiny, soft, green carpet on soil, rocks or bark?", yes: end("Mosses", "Bryophyta", "phylum"),
+        no: { q: "Is it thick, fleshy and spiny?", yes: end("Cacti", "Cactaceae", "family"),
+          no: { q: "Does it have long, narrow, grass-like blades?", yes: end("Grasses", "Poaceae", "family"),
+            no: { q: "Are its flowers daisy-like, with many tiny flowers packed into one head?", yes: end("Daisies, asters and sunflowers", "Asteraceae", "family"),
+              no: { q: "Are its flowers shaped like a pea flower, or does it grow seed pods?", yes: end("Legumes (peas, bluebonnets, mesquite)", "Fabaceae", "family"),
+                no: end("Flowering plants", "Magnoliopsida", "class") } } } } } } },
+  animal: { q: "Does it have feathers?", yes: end("Birds", "Aves", "class"),
+    no: { q: "Does it have fur or hair?", yes: end("Mammals", "Mammalia", "class"),
+      no: { q: "Does it have dry, scaly skin? (lizards, snakes, turtles)", yes: end("Reptiles", "Reptilia", "class"),
+        no: { q: "Does it have smooth, moist skin? (frogs, toads, salamanders)", yes: end("Amphibians", "Amphibia", "class"),
+          no: { q: "Does it live in water and have fins?", yes: end("Fish", "Actinopterygii", "class"),
+            no: { q: "Does it have 8 legs?", yes: end("Spiders", "Araneae", "order"),
+              no: { q: "Does it have 6 legs?", yes: "insect",
+                no: { q: "Is it soft and slimy, maybe with a shell?", yes: end("Snails and slugs", "Gastropoda", "class"), no: end("Other animals", "Animalia", "kingdom") } } } } } } } },
+  insect: { q: "Does it have big, colorful, dusty wings?", yes: end("Butterflies and moths", "Lepidoptera", "order"),
+    no: { q: "Does it have a hard, shiny shell over its wings?", yes: end("Beetles", "Coleoptera", "order"),
+      no: { q: "Does it have a long, thin body and 4 clear wings?", yes: end("Dragonflies and damselflies", "Odonata", "order"),
+        no: { q: "Does it have a narrow waist? (bees, wasps, ants)", yes: end("Bees, wasps and ants", "Hymenoptera", "order"),
+          no: end("Insects", "Insecta", "class") } } } }
+};
+let keyPath = [];
+const resolveNode = (n) => (typeof n === "string" ? KEY[n] : n);
+function keyStart() { keyPath = [{ node: KEY }]; drawKey(); }
+function drawKey() {
+  const cur = keyPath[keyPath.length - 1].node, body = $("keyBody");
+  $("trail").innerHTML = keyPath.slice(0, -1).map((s) => `<li>${esc(s.node.q)} <b>${s.ans}</b></li>`).join("");
+  const nav = `<div class="row" style="margin-top:18px">${keyPath.length > 1 ? `<button class="btn sm" type="button" id="kBack">Back</button>` : ""}<button class="btn sm" type="button" id="kRestart">Start over</button></div>`;
+  if (cur.end) {
+    body.innerHTML = `<span class="eyebrow">It's probably one of these</span><p class="q">${esc(cur.end)}</p><div class="status" id="kStatus">Loading species…</div><div id="kTiles"></div>${nav}`;
+    keyResults(cur);
+  } else {
+    body.innerHTML = `<p class="q">${esc(cur.q)}</p><div class="answers"><button class="btn primary" type="button" id="kYes">Yes</button><button class="btn" type="button" id="kNo">No</button></div>${nav}`;
+    $("kYes").onclick = () => { keyPath[keyPath.length - 1].ans = "Yes"; keyPath.push({ node: resolveNode(cur.yes) }); drawKey(); };
+    $("kNo").onclick = () => { keyPath[keyPath.length - 1].ans = "No"; keyPath.push({ node: resolveNode(cur.no) }); drawKey(); };
+  }
+  if ($("kBack")) $("kBack").onclick = () => { keyPath.pop(); delete keyPath[keyPath.length - 1].ans; drawKey(); };
+  $("kRestart").onclick = keyStart;
+}
+async function taxonId(name, rank) {
+  const d = await getJSON(`${INAT}/taxa?q=${encodeURIComponent(name)}&rank=${rank}&per_page=10`);
+  const hit = (d.results || []).find((t) => t.name.toLowerCase() === name.toLowerCase()) || d.results?.[0];
+  if (!hit) throw new Error("Couldn't find that group on iNaturalist.");
+  return hit.id;
+}
+async function keyResults(node) {
+  const st = $("kStatus");
+  try {
+    const id = await taxonId(node.taxon, node.rank);
+    const where = loc ? { lat: loc.lat, lng: loc.lng, radius: "50" } : {};
+    const list = await speciesCounts({ taxon_id: String(id), ...where }, 24);
+    if (!$("kTiles")) return;
+    setMsg(st, list.length ? (loc ? `The most-seen ${node.end.toLowerCase()} within 50 km of ${loc.label}. Tap one to compare.` : `The most-seen ${node.end.toLowerCase()} worldwide. Set your location to see ones near you.`) : "None recorded near you yet.");
+    $("kTiles").innerHTML = tiles(list);
+  } catch (e) { setMsg(st, e.message, true); }
+}
+
+/* =========================================================
+   Camera Record
+   ========================================================= */
+let records = store.get("nn-records", []);
+function saveRecords() {
+  while (!store.set("nn-records", records) && records.length > 10) records.pop(); // drop oldest if storage is full
+  drawRecords(); drawStats();
+}
+function addRecord(r) {
+  records.unshift({ id: Date.now() + "-" + Math.random().toString(36).slice(2, 6), date: new Date().toISOString(), count: 1, place: loc?.label || "", lat: loc?.lat, lng: loc?.lng, ...r });
+  records = records.slice(0, 300);
+  saveRecords();
+}
+function drawStats() {
+  const species = new Set(records.map((r) => (r.sci || r.name || "").toLowerCase()));
+  $("sSight").textContent = fmt(records.reduce((n, r) => n + (Number(r.count) || 1), 0));
+  $("sSpecies").textContent = fmt(species.size);
+  $("sNative").textContent = fmt(records.filter((r) => r.status === "native").length);
+  $("sInvasive").textContent = fmt(records.filter((r) => r.status === "introduced" || r.status === "invasive").length);
+}
+function drawRecords() {
+  const box = $("recs");
+  $("recEmpty").hidden = records.length > 0;
+  box.innerHTML = records.map((r) => {
+    const d = new Date(r.date);
+    const when = isNaN(d) ? "" : d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    return `<div class="rec">
+      <span class="ph" data-open="${esc(r.id)}" role="button" tabindex="0" aria-label="Open ${esc(r.name)}" style="background-image:url('${esc(r.thumb || "")}')"></span>
+      <div style="min-width:0"><b>${esc(r.name)}</b>${r.count > 1 ? ` <span class="small">× ${fmt(r.count)}</span>` : ""}
+        ${r.status ? ` <span class="pill ${esc(r.status)}">${r.status === "introduced" ? "not native" : esc(r.status)}</span>` : ""}
+        <div class="meta">${[r.sci && r.sci !== r.name ? `<i>${esc(r.sci)}</i>` : "", esc(when), esc(r.place || ""), esc(r.source || "")].filter(Boolean).join(" · ")}</div>
+        ${r.notes ? `<div class="meta">${esc(r.notes)}</div>` : ""}</div>
+      <button class="btn sm" type="button" data-del="${esc(r.id)}">Delete</button></div>`;
+  }).join("");
+}
+$("recs").addEventListener("click", (e) => {
+  const del = e.target.closest("[data-del]"), open = e.target.closest("[data-open]");
+  if (del) {
+    if (del.dataset.armed) { records = records.filter((r) => r.id !== del.dataset.del); saveRecords(); }
+    else { del.dataset.armed = "1"; del.textContent = "Tap again to delete"; setTimeout(() => { if (del.isConnected) { delete del.dataset.armed; del.textContent = "Delete"; } }, 3000); }
+  } else if (open) {
+    const r = records.find((x) => x.id === open.dataset.open); if (!r) return;
+    if (r.result) { showTab("photo"); render({ ...r.result, thumb: r.thumb }); }
+    else if (r.taxonId) openSpecies(r.taxonId);
+  }
+});
+$("recAdd").onclick = () => { $("recForm").hidden = false; $("recName").focus(); };
+$("recCancel").onclick = () => { $("recForm").hidden = true; $("recForm").reset(); $("recSugs").innerHTML = ""; picked = null; };
+let picked = null, sugT;
+$("recName").oninput = (e) => {
+  picked = null; clearTimeout(sugT);
+  const q = e.target.value.trim(); if (q.length < 2) { $("recSugs").innerHTML = ""; return; }
+  sugT = setTimeout(async () => {
+    try {
+      const d = await getJSON(`${INAT}/taxa/autocomplete?q=${encodeURIComponent(q)}&per_page=6&is_active=true`);
+      $("recSugs").innerHTML = (d.results || []).filter((t) => KEEP.has(t.iconic_taxon_name)).map((t) =>
+        `<button class="btn sm" type="button" data-pick='${esc(JSON.stringify({ id: t.id, sci: t.name, name: t.preferred_common_name || t.name, plant: t.iconic_taxon_name === "Plantae", photo: t.default_photo?.square_url || "" }))}'>${esc(t.preferred_common_name || t.name)}</button>`).join("");
+    } catch {}
+  }, 300);
+};
+$("recSugs").onclick = (e) => {
+  const b = e.target.closest("[data-pick]"); if (!b) return;
+  picked = JSON.parse(b.dataset.pick); $("recName").value = picked.name; $("recSugs").innerHTML = "";
+};
+$("recForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const name = $("recName").value.trim(); if (!name) return;
+  const f = $("recPhoto").files[0];
+  let th = picked?.photo || "";
+  if (f) { try { th = await thumb(f); } catch {} }
+  let st = null;
+  if (picked && loc) { $("recMsg").textContent = "Checking native status…"; st = await nativeStatus(picked.id).catch(() => null); }
+  addRecord({ name, sci: picked?.sci || "", taxonId: picked?.id, group: picked ? (picked.plant ? "plant" : "animal") : "", count: Math.max(1, Number($("recCount").value) || 1),
+    notes: $("recNotes").value.trim(), thumb: th, status: st?.status, statusPlace: st?.place, source: "Added" });
+  $("recForm").reset(); $("recForm").hidden = true; $("recSugs").innerHTML = ""; picked = null; $("recMsg").textContent = "";
+};
+$("recExport").onclick = () => {
+  if (!records.length) return;
+  const cols = ["date", "name", "sci", "count", "status", "place", "lat", "lng", "notes", "source"];
+  const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const csv = [cols.join(","), ...records.map((r) => cols.map((c) => cell(r[c])).join(","))].join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = `native-nature-record-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.append(a); a.click(); a.remove();
+};
+async function thumb(blob) {
+  const img = await createImageBitmap(blob); const s = 200, c = document.createElement("canvas"); c.width = c.height = s;
+  const m = Math.min(img.width, img.height);
+  c.getContext("2d").drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, s, s);
+  return c.toDataURL("image/jpeg", 0.7);
+}
+
+/* =========================================================
+   Photo ID
+   ========================================================= */
+const drop = $("drop"), file = $("file"), preview = $("preview"), hint = $("hint"), go = $("go"),
+      statusEl = $("status"), label = $("label"), where = $("where"), stepsEl = $("steps");
+let photo = null;
+const EXAMPLE = {
+  example: true, group: "plant", category: "Flower", common_name: "Texas Bluebonnet", scientific_name: "Lupinus texensis",
+  confidence: 94, source: "Pl@ntNet", status: "native", statusPlace: "Texas", statusSource: "iNaturalist",
+  taxonomy: { kingdom: "Plantae", class: "Magnoliopsida", order: "Fabales", family: "Fabaceae", genus: "Lupinus" },
+  key_features: ["Spikes of blue pea-shaped flowers with white tips", "Palm-shaped leaves with 5 leaflets", "Grows 30 to 45 cm tall in spring"],
+  habitat: "Open fields, roadsides and prairies across central Texas; blooms March to April.",
+  fun_fact: "It is the state flower of Texas, and the white spot on each flower turns reddish purple after it has been pollinated.",
+  safety: "Seeds are toxic if eaten; keep them away from pets and small kids.", similar: ["Sandyland bluebonnet", "Big Bend bluebonnet"]
+};
+function render(r) {
+  const t = r.taxonomy || {}, conf = Math.max(0, Math.min(100, Number(r.confidence) || 0)), inat = r.inat;
+  const rows = [["Kingdom", t.kingdom], ["Class", t.class], ["Order", t.order], ["Family", t.family], ["Genus", t.genus]].filter(([, v]) => v)
+    .map(([k, v]) => `<dt>${k}</dt><dd>${k === "Genus" ? `<i>${esc(v)}</i>` : esc(v)}</dd>`).join("");
+  const mine = r.thumb || (r.example ? "" : photo?.url);
+  label.innerHTML = `
+    <div class="label-top"><div class="row"><span class="pill">${esc(r.category || "Organism")}</span>${r.source ? `<span class="pill">ID by ${esc(r.source)}</span>` : ""}</div>
+      ${r.example ? '<span class="pill">Example result</span>' : `<span class="small">${esc(r.date || "")}</span>`}</div>
+    <div><h2 class="common">${esc(r.common_name || "Unknown")}</h2>${r.scientific_name ? `<p class="sci">${esc(r.scientific_name)}</p>` : ""}</div>
+    ${statusBox(r.status ? { status: r.status, place: r.statusPlace || r.placeLabel, source: r.statusSource, note: r.statusNote } : null)}
+    ${inat?.photo && mine ? `<div class="compare"><figure><img src="${esc(mine)}" alt="Your photo"><figcaption>Your photo</figcaption></figure>
+      <figure><img src="${esc(inat.photo)}" alt="Reference photo"><figcaption>iNaturalist reference${inat.photoCredit ? " · " + esc(inat.photoCredit) : ""}</figcaption></figure></div>` : ""}
+    <div class="sec"><h4>${r.source === "Pl@ntNet" ? "Pl@ntNet match" : "Confidence"} · ${conf}%</h4><div class="bar2"><i style="width:${conf}%"></i></div></div>
+    ${r.note ? `<p class="note">${esc(r.note)}</p>` : ""}
+    ${rows ? `<dl class="taxa">${rows}</dl>` : ""}
+    ${inat ? `<div class="nums"><div><b>${fmt(inat.observations)}</b><span>sightings on iNaturalist</span></div>
+      ${inat.nearby != null ? `<div><b>${fmt(inat.nearby)}</b><span>within 50 km of ${esc(r.placeLabel || "you")}</span></div>` : ""}
+      ${inat.conservation ? `<div><b>${esc(inat.conservation)}</b><span>conservation status</span></div>` : ""}</div>` : ""}
+    ${r.safety && !/^none\b/i.test(r.safety) ? `<div class="safety">⚠ ${esc(r.safety)}</div>` : ""}
+    ${Array.isArray(r.key_features) && r.key_features.length ? `<div class="sec"><h4>How to tell</h4><ul>${r.key_features.map((f) => `<li>${esc(f)}</li>`).join("")}</ul></div>` : ""}
+    ${r.habitat ? `<div class="sec"><h4>Habitat and range</h4><p>${esc(r.habitat)}</p></div>` : ""}
+    ${r.fun_fact ? `<div class="sec"><h4>Fun fact</h4><p>${esc(r.fun_fact)}</p></div>` : ""}
+    ${Array.isArray(r.similar) && r.similar.length ? `<p class="note">Could also be: ${r.similar.map(esc).join(", ")}</p>` : ""}
+    ${inat?.id ? `<div class="row"><button class="btn sm" type="button" data-taxon="${inat.id}">More about this species</button></div>` : ""}`;
+}
+async function shrink(f) {
+  const bmp = await createImageBitmap(f, { imageOrientation: "from-image" });
+  const scale = Math.min(1, 1568 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas"); c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+  c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+  const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", 0.85));
+  const base64 = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result.split(",")[1]); fr.readAsDataURL(blob); });
+  return { blob, base64, mediaType: "image/jpeg", url: URL.createObjectURL(blob) };
+}
+async function choose(f) {
+  if (!f) return;
+  if (!f.type.startsWith("image/")) { setMsg(statusEl, "That file isn't a photo. Choose a JPG, PNG or HEIC image.", true); return; }
+  try {
+    setMsg(statusEl, "Preparing photo…");
+    photo = await shrink(f);
+    preview.src = photo.url; preview.hidden = false; hint.hidden = true;
+    go.disabled = false; setMsg(statusEl, "Photo ready. Tap Identify.");
+  } catch { setMsg(statusEl, "This browser couldn't open that photo. Try a JPG or PNG.", true); }
+}
+drop.onclick = () => file.click();
+$("pick").onclick = () => file.click();
+drop.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); file.click(); } };
+file.onchange = () => choose(file.files[0]);
+["dragover", "dragenter"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, () => drop.classList.remove("over")));
+drop.addEventListener("drop", (e) => { e.preventDefault(); choose(e.dataTransfer.files[0]); });
+document.addEventListener("paste", (e) => { const f = [...(e.clipboardData?.files || [])][0]; if (f) { showTab("photo"); choose(f); } });
+
+async function api(path, body) {
+  const res = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || (res.status === 504 ? "The server took too long. Try again." : "Something went wrong. Try again."));
+  return data;
+}
+const sameSpecies = (a, b) => (a || "").toLowerCase().split(/\s+/).slice(0, 2).join(" ") === (b || "").toLowerCase().split(/\s+/).slice(0, 2).join(" ");
 async function inaturalist(sci, coords) {
   try {
     const name = sci.replace(/\s+sp\.?$/i, "").trim();
-    const s = await (await fetch(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(name)}&per_page=10`)).json();
+    const s = await getJSON(`${INAT}/taxa?q=${encodeURIComponent(name)}&per_page=10`);
     if (!s.results?.length) return null;
     const hit = s.results.find((t) => t.name.toLowerCase() === name.toLowerCase()) || s.results[0];
-    const d = (await (await fetch(`https://api.inaturalist.org/v1/taxa/${hit.id}`)).json()).results?.[0] || hit;
-    const chain = [...(d.ancestors || []), d];
-    const rank = (r) => chain.find((a) => a.rank === r)?.name;
+    const d = (await getJSON(`${INAT}/taxa/${hit.id}`)).results?.[0] || hit;
+    const chain = [...(d.ancestors || []), d], rank = (r) => chain.find((a) => a.rank === r)?.name;
     let nearby = null;
-    if (coords) {
-      const o = await (await fetch(`https://api.inaturalist.org/v1/observations?taxon_id=${d.id}&lat=${coords.lat}&lng=${coords.lng}&radius=50&verifiable=true&per_page=0`)).json();
-      nearby = o.total_results ?? null;
-    }
-    return {
-      id: d.id, url: `https://www.inaturalist.org/taxa/${d.id}`, name: d.name, common: d.preferred_common_name,
-      photo: d.default_photo?.medium_url, photoCredit: d.default_photo?.attribution,
+    if (coords) nearby = (await getJSON(`${INAT}/observations?taxon_id=${d.id}&lat=${coords.lat}&lng=${coords.lng}&radius=50&verifiable=true&per_page=0`)).total_results ?? null;
+    return { id: d.id, name: d.name, common: d.preferred_common_name, photo: d.default_photo?.medium_url, photoCredit: d.default_photo?.attribution,
       observations: d.observations_count, conservation: d.conservation_status?.status_name, nearby,
-      taxonomy: { kingdom: rank("kingdom"), class: rank("class"), order: rank("order"), family: rank("family"), genus: rank("genus") }
-    };
+      taxonomy: { kingdom: rank("kingdom"), class: rank("class"), order: rank("order"), family: rank("family"), genus: rank("genus") } };
   } catch { return null; }
 }
-
-function showSteps(list) {
-  stepsEl.hidden = false;
-  stepsEl.innerHTML = list.map((s) => `<li data-k="${s[0]}">○ ${esc(s[1])}</li>`).join("");
-}
-function step(k, state) {
-  const li = stepsEl.querySelector(`[data-k="${k}"]`); if (!li) return;
-  li.className = state; li.textContent = (state === "done" ? "● " : state === "on" ? "◐ " : "○ ") + li.textContent.slice(2);
-}
+function showSteps(list) { stepsEl.hidden = false; stepsEl.innerHTML = list.map((s) => `<li data-k="${s[0]}">○ ${esc(s[1])}</li>`).join(""); }
+function step(k, state) { const li = stepsEl.querySelector(`[data-k="${k}"]`); if (!li) return; li.className = state; li.textContent = (state === "done" ? "● " : state === "on" ? "◐ " : "○ ") + li.textContent.slice(2); }
 
 go.onclick = async () => {
   if (!photo) return;
-  go.disabled = true; setStatus("");
-  const ctx = where.value.trim();
-  const place = loc?.label || "";
-  const coords = loc ? { lat: loc.lat, lng: loc.lng } : null;
+  go.disabled = true; setMsg(statusEl, "");
+  const ctx = where.value.trim(), place = loc?.label || "", coords = loc ? { lat: loc.lat, lng: loc.lng } : null;
   showSteps([["claude", "Claude looks at the photo"], ["plantnet", "Pl@ntNet checks plants"], ["inat", "iNaturalist species details"]]);
   try {
     step("claude", "on");
     let r = await api("/api/identify", { image: photo.base64, mediaType: photo.mediaType, where: ctx, place });
     step("claude", "done");
-    if (r.group !== "plant" && r.group !== "animal") {
-      label.innerHTML = `<h2 class="common">This is not a plant or animal.</h2>`;
-      stepsEl.hidden = true;
-      return;
-    }
+    if (r.group !== "plant" && r.group !== "animal") { label.innerHTML = `<h2 class="common">This is not a plant or animal.</h2>`; stepsEl.hidden = true; return; }
     r.source = "Claude";
-
     if (r.group === "plant") {
       step("plantnet", "on");
       try {
         const pn = await api("/api/plantnet", { image: photo.base64, mediaType: photo.mediaType });
-        const matches = pn.matches || [];
-        const top = matches[0];
+        const matches = pn.matches || [], top = matches[0];
         if (top && top.score >= 15) {
           const claudeName = r.scientific_name;
           if (!sameSpecies(top.scientific_name, claudeName)) {
@@ -430,88 +867,54 @@ go.onclick = async () => {
             r = { ...r, ...d, group: "plant" };
             r.note = `Claude first guessed ${claudeName}, but Pl@ntNet's botanist-trained match is used here.`;
           }
-          r.scientific_name = top.scientific_name;
-          r.common_name = r.common_name || top.common_name;
-          r.confidence = top.score;
-          r.source = "Pl@ntNet";
+          Object.assign(r, { scientific_name: top.scientific_name, common_name: r.common_name || top.common_name, confidence: top.score, source: "Pl@ntNet" });
           r.taxonomy = { ...(r.taxonomy || {}), family: top.family || r.taxonomy?.family, genus: top.genus || r.taxonomy?.genus };
           const others = matches.slice(1, 4).filter((m) => m.score >= 5).map((m) => `${m.common_name || m.scientific_name} (${m.score}%)`);
           if (others.length) r.similar = others;
-        } else if (!pn.disabled) {
-          r.note = "Pl@ntNet wasn't sure about this one, so Claude's ID is shown.";
-        }
-      } catch (e) {
-        r.note = `Pl@ntNet didn't answer (${e.message}), so Claude's ID is shown.`;
-      }
+        } else if (!pn.disabled) r.note = "Pl@ntNet wasn't sure about this one, so Claude's ID is shown.";
+      } catch (e) { r.note = `Pl@ntNet didn't answer (${e.message}), so Claude's ID is shown.`; }
       step("plantnet", "done");
-    } else {
-      stepsEl.querySelector('[data-k="plantnet"]')?.remove();
-    }
+    } else stepsEl.querySelector('[data-k="plantnet"]')?.remove();
 
-    if (r.group !== "none" && r.scientific_name) {
+    if (r.scientific_name) {
       step("inat", "on");
       r.inat = await inaturalist(r.scientific_name, coords);
       if (r.inat) {
         r.taxonomy = { ...(r.taxonomy || {}), ...Object.fromEntries(Object.entries(r.inat.taxonomy).filter(([, v]) => v)) };
         if (!r.common_name && r.inat.common) r.common_name = r.inat.common;
       }
-      // Native or invasive: iNaturalist's local checklists first, Claude's knowledge as a backup.
       if (loc) {
         r.placeLabel = loc.label;
         const claudeSays = ["native", "introduced", "invasive"].includes(r.native_status) ? r.native_status : null;
         const inatSays = r.inat ? await nativeStatus(r.inat.id).catch(() => null) : null;
-        if (inatSays?.status === "native") {
-          Object.assign(r, { status: "native", statusPlace: inatSays.place, statusSource: "iNaturalist" });
-        } else if (inatSays?.status === "introduced") {
-          Object.assign(r, { status: claudeSays === "invasive" ? "invasive" : "introduced", statusPlace: inatSays.place, statusSource: "iNaturalist" });
-        } else if (claudeSays) {
-          Object.assign(r, { status: claudeSays, statusSource: "Claude's estimate", statusNote: r.native_note || "" });
-        } else {
-          r.status = "unknown";
-        }
+        if (inatSays?.status === "native") Object.assign(r, { status: "native", statusPlace: inatSays.place, statusSource: "iNaturalist" });
+        else if (inatSays?.status === "introduced") Object.assign(r, { status: claudeSays === "invasive" ? "invasive" : "introduced", statusPlace: inatSays.place, statusSource: "iNaturalist" });
+        else if (claudeSays) Object.assign(r, { status: claudeSays, statusSource: "Claude's estimate", statusNote: r.native_note || "" });
+        else r.status = "unknown";
       }
       step("inat", "done");
-    } else {
-      stepsEl.querySelector('[data-k="inat"]')?.remove();
     }
-
     r.date = new Date().toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-    r.thumb = await thumb(photo.blob);
-    render(r);
-    setStatus("");
-    stepsEl.hidden = true;
-    if (r.group !== "none") { log.unshift(r); log = log.slice(0, 24); saveLog(); drawLog(); }
-  } catch (e) {
-    setStatus(e.message, true);
-    stepsEl.hidden = true;
-  } finally {
-    go.disabled = !photo;
-  }
+    const th = await thumb(photo.blob).catch(() => "");
+    r.thumb = th;
+    render(r); setMsg(statusEl, "Saved to your Camera Record."); stepsEl.hidden = true;
+    const { thumb: _t, ...result } = r;
+    addRecord({ name: r.common_name || r.scientific_name, sci: r.scientific_name, taxonId: r.inat?.id, group: r.group, status: r.status === "unknown" ? undefined : r.status,
+      statusPlace: r.statusPlace, thumb: th, source: "Photo ID", notes: ctx, result });
+  } catch (e) { setMsg(statusEl, e.message, true); stepsEl.hidden = true; }
+  finally { go.disabled = !photo; }
 };
 
-/* ---------- Field log (this browser only) ---------- */
-async function thumb(blob) {
-  try {
-    const img = await createImageBitmap(blob); const s = 200, c = document.createElement("canvas"); c.width = c.height = s;
-    const m = Math.min(img.width, img.height);
-    c.getContext("2d").drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, s, s);
-    return c.toDataURL("image/jpeg", 0.7);
-  } catch { return ""; }
-}
-function saveLog() { try { localStorage.setItem("wildid-log", JSON.stringify(log)); } catch {} }
-function loadLog() { try { log = JSON.parse(localStorage.getItem("wildid-log") || "[]") || []; } catch { log = []; } }
-function drawLog() {
-  const ul = $("log"); ul.innerHTML = "";
-  $("logEmpty").hidden = log.length > 0;
-  log.forEach((r) => {
-    const li = document.createElement("li"), b = document.createElement("button");
-    b.innerHTML = `${r.thumb ? `<img src="${r.thumb}" alt="">` : ""}<b>${esc(r.common_name)}</b><small>${esc(r.date || "")} · ${esc(r.source || "")}</small>`;
-    b.onclick = () => { render(r); label.scrollIntoView({ behavior: "smooth", block: "start" }); };
-    li.append(b); ul.append(li);
-  });
-}
-
-loadLog(); drawLog(); render(EXAMPLE);
+/* =========================================================
+   Start
+   ========================================================= */
+render(EXAMPLE); drawRecords(); drawStats(); showLoc();
+showTab((location.hash || "#map").slice(1));
+(async () => {
+  if (loc) return;
+  try { const p = await navigator.permissions?.query({ name: "geolocation" }); if (p?.state === "denied") { showLoc("Location is blocked in this browser. Type your city instead."); return; } } catch {}
+  askLocation();
+})();
 </script>
 </body>
 </html>

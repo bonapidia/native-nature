@@ -1,6 +1,17 @@
 # Native Nature
 
-Snap a photo of any plant or animal and find out what it is. Plants are identified with Pl@ntNet, animals with Claude, and species details come from iNaturalist.
+Native plants, wildlife, and invasive species, anywhere on Earth.
+
+| Tab | What it does |
+|---|---|
+| **World Map** | Tap anywhere or search a city to see its native plants, native wildlife, and introduced/invasive species (iNaturalist). |
+| **Photo ID** | Identify a plant or animal from a photo. Plants: Pl@ntNet. Animals: Claude. Shows if it's native or invasive where you are. |
+| **In Bloom Now** | Plants photographed flowering within 50 km of you in the last 30 days. |
+| **Identify a Species** | Search by name for photos, facts, and native status. |
+| **Guided ID Key** | Yes/no questions that narrow down what you saw, then show matching species near you. |
+| **Camera Record** | Your sightings log, saved in your browser. Export to CSV. |
+
+The site asks for your location once (or you can type a city) and remembers it in your browser.
 
 **No API keys are stored in this code.** They go in Netlify's settings, so this repo is safe to keep on GitHub.
 
