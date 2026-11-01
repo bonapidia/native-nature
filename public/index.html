@@ -511,12 +511,17 @@ dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
 let map, marker;
 function initMap() {
   if (map || !window.L) { if (!window.L) $("map").innerHTML = `<p class="empty">The map couldn't load. Check your internet connection.</p>`; return; }
-  map = L.map("map", { worldCopyJump: true, zoomControl: true }).setView(loc ? [loc.lat, loc.lng] : [20, 0], loc ? 6 : 2);
-  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 18, attribution: "Imagery © Esri" }).addTo(map);
-  map.on("click", (e) => explore(e.latlng.lat, ((e.latlng.lng + 540) % 360) - 180));
+  // One copy of the world: no wrapping, and you can't pan past the edges.
+  const world = [[-85, -180], [85, 180]];
+  map = L.map("map", { zoomControl: true, maxBounds: world, maxBoundsViscosity: 1, worldCopyJump: false, minZoom: 1 });
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 18, noWrap: true, bounds: world, attribution: "Imagery © Esri" }).addTo(map);
+  const fitWorld = () => { map.setMinZoom(Math.max(1, map.getBoundsZoom(world, true))); };
+  fitWorld(); map.on("resize", fitWorld);
+  if (loc) map.setView([loc.lat, loc.lng], 6); else map.fitBounds(world);
+  map.on("click", (e) => explore(e.latlng.lat, e.latlng.lng));
 }
 cityPicker($("mapForm"), $("mapQ"), $("mapResults"), (c) => explore(c.lat, c.lng, c.name), (m) => { $("mapPanel").innerHTML = `<p class="status err">${esc(m)}</p>`; });
-$("mapReset").onclick = () => { if (marker) { marker.remove(); marker = null; } map?.setView([20, 0], 2); $("mapPanel").innerHTML = `<p class="lead" style="margin:0">Tap anywhere on the map, or search a place, to see what grows and lives there.</p>`; };
+$("mapReset").onclick = () => { if (marker) { marker.remove(); marker = null; } map?.fitBounds([[-85, -180], [85, 180]]); $("mapPanel").innerHTML = `<p class="lead" style="margin:0">Tap anywhere on the map, or search a place, to see what grows and lives there.</p>`; };
 $("mapMine").onclick = () => { if (loc) explore(loc.lat, loc.lng, loc.label); else askLocation(); };
 
 let exploreRun = 0;
