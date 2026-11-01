@@ -1,9 +1,10 @@
 // Step 1: Claude looks at the photo, decides plant vs animal, and gives a first ID.
-import { handler, readImage, askClaude, DESCRIBE_SHAPE, cleanWhere } from "../../lib/shared.mjs";
+import { handler, readImage, askClaude, DESCRIBE_SHAPE, cleanWhere, statusShape } from "../../lib/shared.mjs";
 
 export default handler(async (body) => {
   const img = readImage(body);
   const where = cleanWhere(body.where);
+  const place = cleanWhere(body.place);
 
   const prompt = `You are an expert naturalist. First decide whether the main subject of this photo is a real, living (or once-living) plant or animal.
 ${where ? `The photographer says where they saw it: "${where}". Use it only as context.` : ""}
@@ -15,7 +16,7 @@ Otherwise reply with ONLY a JSON object of this shape:
  "scientific_name": "Genus species (or Genus sp. if unsure of species)",
  "confidence": integer 0-100,
  "taxonomy": {"kingdom": string, "family": string, "genus": string},
- ${DESCRIBE_SHAPE}}
+ ${statusShape(place)}${DESCRIBE_SHAPE}}
 "group" is "plant" for any plant, tree, flower, grass, fern, moss or cactus.
 Lower confidence for blurry photos or species that are hard to tell apart.`;
 

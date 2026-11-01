@@ -76,6 +76,22 @@ textarea{width:100%;font:inherit;background:var(--card);color:var(--ink);border:
 .taxa{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;margin:0;border-top:1px solid var(--line);padding-top:12px}
 .taxa dt{font:500 .75rem var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-top:3px}
 .taxa dd{margin:0}
+.loc{display:grid;gap:10px;background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:12px 14px}
+.loc-head{display:grid;gap:2px}
+.loc-head b{font:700 1.05rem var(--f-body)}
+.city{flex:1 1 200px;flex-wrap:nowrap}
+.city input{flex:1;min-width:0;font:inherit;background:var(--paper);color:var(--ink);border:1.5px solid var(--line);border-radius:999px;padding:10px 14px}
+#cityResults button{padding:7px 14px;font-weight:400;font-size:.88rem}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.native{display:grid;gap:2px;border-radius:10px;padding:12px 14px;border:1.5px solid}
+.native b{font:800 1.15rem var(--f-display)}
+.native span{font-size:.88rem}
+.native.is-native{background:color-mix(in srgb,var(--moss) 14%,transparent);border-color:var(--moss)}
+.native.is-native b{color:var(--moss)}
+.native.is-introduced{background:color-mix(in srgb,var(--tag) 22%,transparent);border-color:var(--tag)}
+.native.is-invasive{background:var(--warn-bg);border-color:var(--warn)}
+.native.is-invasive b{color:var(--warn)}
+.native.is-unknown{border-color:var(--line);color:var(--muted)}
 .stats{display:flex;flex-wrap:wrap;gap:8px 20px;font-variant-numeric:tabular-nums}
 .stats b{font:800 1.3rem var(--f-display);display:block}
 .stats span{font-size:.8rem;color:var(--muted)}
@@ -115,7 +131,15 @@ footer{color:var(--muted);font-size:.85rem;display:grid;gap:4px}
       <input id="file" type="file" accept="image/*" hidden>
       <label class="small" for="where">Where did you see it? (optional, helps accuracy)</label>
       <textarea id="where" placeholder="e.g. backyard in Leander, TX, at night, on a live oak trunk"></textarea>
-      <label class="check"><input type="checkbox" id="near"> Count iNaturalist sightings near me</label>
+      <div class="loc" id="loc">
+        <div class="loc-head"><span class="eyebrow">Your location</span><b id="locName">Not set</b>
+          <span class="small" id="locHint">Share your location to see if each species is native or invasive where you are.</span></div>
+        <div class="row">
+          <button type="button" id="locBtn">Use my location</button>
+          <form id="cityForm" class="row city"><label for="city" class="sr">City</label><input id="city" placeholder="or type a city" autocomplete="off"><button type="submit">Set</button></form>
+        </div>
+        <div class="row" id="cityResults"></div>
+      </div>
       <div class="row">
         <button class="primary" id="go" disabled>Identify</button>
         <button id="pick">New photo</button>
@@ -147,7 +171,7 @@ let log = [];
 
 const EXAMPLE = {
   example: true, group: "plant", category: "Flower", common_name: "Texas Bluebonnet", scientific_name: "Lupinus texensis",
-  confidence: 94, source: "Pl@ntNet",
+  confidence: 94, source: "Pl@ntNet", status: "native", statusPlace: "Texas", statusSource: "iNaturalist",
   taxonomy: { kingdom: "Plantae", class: "Magnoliopsida", order: "Fabales", family: "Fabaceae", genus: "Lupinus" },
   key_features: ["Spikes of blue pea-shaped flowers with white tips", "Palm-shaped leaves with 5 leaflets", "Grows 30 to 45 cm tall in spring"],
   habitat: "Open fields, roadsides and prairies across central Texas; blooms March to April.",
@@ -175,6 +199,7 @@ function render(r) {
     </div>
     <div><h2 class="common">${esc(r.common_name || "Unknown")}</h2>
       ${r.scientific_name ? `<p class="sci">${esc(r.scientific_name)}</p>` : ""}</div>
+    ${statusBox(r)}
     ${inat?.photo && mine ? `<div class="compare">
       <figure><img src="${esc(mine)}" alt="Your photo"><figcaption>Your photo</figcaption></figure>
       <figure><img src="${esc(inat.photo)}" alt="Reference photo of ${esc(r.common_name)}"><figcaption>iNaturalist reference${inat.photoCredit ? ` · ${esc(inat.photoCredit)}` : ""}</figcaption></figure>
@@ -184,7 +209,7 @@ function render(r) {
     ${rows ? `<dl class="taxa">${rows}</dl>` : ""}
     ${inat ? `<div class="stats">
       <div><b>${fmt(inat.observations || 0)}</b><span>sightings on iNaturalist</span></div>
-      ${inat.nearby != null ? `<div><b>${fmt(inat.nearby)}</b><span>within 50 km of you</span></div>` : ""}
+      ${inat.nearby != null ? `<div><b>${fmt(inat.nearby)}</b><span>within 50 km of ${esc(r.placeLabel || "you")}</span></div>` : ""}
       ${inat.conservation ? `<div><b>${esc(inat.conservation)}</b><span>conservation status</span></div>` : ""}
     </div>` : ""}
     ${r.safety && !/^none\b/i.test(r.safety) ? `<div class="safety">⚠ ${esc(r.safety)}</div>` : ""}
@@ -238,13 +263,108 @@ async function api(path, body) {
 
 const sameSpecies = (a, b) => (a || "").toLowerCase().split(/\s+/).slice(0, 2).join(" ") === (b || "").toLowerCase().split(/\s+/).slice(0, 2).join(" ");
 
-function getCoords() {
-  return new Promise((resolve) => {
-    if (!navigator.geolocation) return resolve(null);
-    navigator.geolocation.getCurrentPosition(
-      (p) => resolve({ lat: p.coords.latitude.toFixed(2), lng: p.coords.longitude.toFixed(2) }), // rounded for privacy
-      () => resolve(null), { timeout: 8000, maximumAge: 600000 });
-  });
+/* ---------- Location (asked once, remembered in this browser) ---------- */
+const INAT = "https://api.inaturalist.org/v1";
+let loc = null; // { lat, lng, label, places: [{ id, name, level }] }
+try { loc = JSON.parse(localStorage.getItem("nn-loc") || "null"); } catch {}
+
+function showLoc(msg) {
+  $("locName").textContent = loc ? loc.label : "Not set";
+  $("locHint").textContent = msg || (loc
+    ? "Each result shows whether the species is native or invasive here."
+    : "Share your location to see if each species is native or invasive where you are.");
+  $("locBtn").textContent = loc ? "Update my location" : "Use my location";
+}
+
+// The iNaturalist places (county, state, country…) that contain this point, most specific first.
+async function placesAt(lat, lng) {
+  const d = 0.005;
+  const res = await fetch(`${INAT}/places/nearby?nelat=${lat + d}&nelng=${lng + d}&swlat=${lat - d}&swlng=${lng - d}&per_page=50`);
+  const data = await res.json();
+  return (data.results?.standard || [])
+    .filter((p) => p.admin_level != null)
+    .sort((a, b) => b.admin_level - a.admin_level)
+    .map((p) => ({ id: p.id, name: p.display_name || p.name, short: (p.display_name || p.name).split(",")[0], level: p.admin_level }));
+}
+
+async function setLocation(lat, lng, label) {
+  lat = Math.round(lat * 100) / 100; lng = Math.round(lng * 100) / 100; // ~1 km, enough for this
+  showLoc("Finding your area…");
+  let places = [];
+  try { places = await placesAt(lat, lng); } catch {}
+  const best = places.find((p) => p.level <= 20) || places[0];
+  loc = { lat, lng, label: label || best?.name || `${lat}, ${lng}`, places: places.slice(0, 4) };
+  try { localStorage.setItem("nn-loc", JSON.stringify(loc)); } catch {}
+  showLoc(places.length ? "" : "Couldn't match this spot to a region, so native status may be missing.");
+}
+
+function askLocation() {
+  if (!navigator.geolocation) { showLoc("This browser can't share location. Type your city instead."); return; }
+  showLoc("Waiting for you to allow location…");
+  navigator.geolocation.getCurrentPosition(
+    (p) => setLocation(p.coords.latitude, p.coords.longitude),
+    (e) => showLoc(e.code === 1 ? "Location was blocked. Type your city instead, or allow location in your browser settings." : "Couldn't get your location. Type your city instead."),
+    { timeout: 10000, maximumAge: 600000 });
+}
+$("locBtn").onclick = askLocation;
+
+$("cityForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const q = $("city").value.trim(); const out = $("cityResults"); out.innerHTML = "";
+  if (!q) return;
+  try {
+    const data = await (await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=en&format=json`)).json();
+    if (!data.results?.length) { showLoc(`No place called "${q}" was found. Check the spelling.`); return; }
+    data.results.forEach((c) => {
+      const b = document.createElement("button"); b.type = "button";
+      const name = [c.name, c.admin1, c.country].filter(Boolean).join(", ");
+      b.textContent = name;
+      b.onclick = () => { out.innerHTML = ""; $("city").value = ""; setLocation(c.latitude, c.longitude, name); };
+      out.append(b);
+    });
+  } catch { showLoc("Couldn't search for that city. Check your internet connection."); }
+};
+
+// Ask on first visit, unless the browser already blocked it.
+showLoc();
+(async () => {
+  if (loc) return;
+  try {
+    const p = await navigator.permissions?.query({ name: "geolocation" });
+    if (p?.state === "denied") { showLoc("Location is blocked in this browser. Type your city instead."); return; }
+  } catch {}
+  askLocation();
+})();
+
+// Native or introduced, from iNaturalist's checklists for the places around you.
+async function nativeStatus(taxonId) {
+  if (!loc?.places?.length) return null;
+  const count = async (placeId, flag) => {
+    const d = await (await fetch(`${INAT}/observations?taxon_id=${taxonId}&place_id=${placeId}&${flag}=true&per_page=0`)).json();
+    return d.total_results || 0;
+  };
+  const checks = await Promise.all(loc.places.slice(0, 3).map(async (p) => {
+    try { const [intro, nat] = await Promise.all([count(p.id, "introduced"), count(p.id, "native")]); return { p, intro, nat }; }
+    catch { return { p, intro: 0, nat: 0 }; }
+  }));
+  for (const c of checks) {
+    if (c.intro > 0) return { status: "introduced", place: c.p.short };
+    if (c.nat > 0) return { status: "native", place: c.p.short };
+  }
+  return null;
+}
+
+function statusBox(r) {
+  if (!r.status) return "";
+  const where = esc(r.statusPlace || r.placeLabel || "your area");
+  const t = {
+    native: ["Native", `Native to ${where}`],
+    introduced: ["Not native", `Introduced to ${where}. It came from somewhere else.`],
+    invasive: ["Invasive", `Invasive in ${where}. It can harm local plants and wildlife.`],
+    unknown: ["Status unknown", `There's no record of whether it's native to ${where}.`]
+  }[r.status] || ["Status unknown", ""];
+  const src = r.statusSource ? ` <span class="small">(${esc(r.statusSource)})</span>` : "";
+  return `<div class="native is-${esc(r.status)}"><b>${t[0]}</b><span>${t[1]}${r.statusNote ? ` ${esc(r.statusNote)}` : ""}${src}</span></div>`;
 }
 
 async function inaturalist(sci, coords) {
@@ -283,11 +403,12 @@ go.onclick = async () => {
   if (!photo) return;
   go.disabled = true; setStatus("");
   const ctx = where.value.trim();
-  const coordsP = $("near").checked ? getCoords() : Promise.resolve(null);
+  const place = loc?.label || "";
+  const coords = loc ? { lat: loc.lat, lng: loc.lng } : null;
   showSteps([["claude", "Claude looks at the photo"], ["plantnet", "Pl@ntNet checks plants"], ["inat", "iNaturalist species details"]]);
   try {
     step("claude", "on");
-    let r = await api("/api/identify", { image: photo.base64, mediaType: photo.mediaType, where: ctx });
+    let r = await api("/api/identify", { image: photo.base64, mediaType: photo.mediaType, where: ctx, place });
     step("claude", "done");
     if (r.group !== "plant" && r.group !== "animal") {
       label.innerHTML = `<h2 class="common">This is not a plant or animal.</h2>`;
@@ -305,7 +426,7 @@ go.onclick = async () => {
         if (top && top.score >= 15) {
           const claudeName = r.scientific_name;
           if (!sameSpecies(top.scientific_name, claudeName)) {
-            const d = await api("/api/describe", { scientific_name: top.scientific_name, common_name: top.common_name, where: ctx });
+            const d = await api("/api/describe", { scientific_name: top.scientific_name, common_name: top.common_name, where: ctx, place });
             r = { ...r, ...d, group: "plant" };
             r.note = `Claude first guessed ${claudeName}, but Pl@ntNet's botanist-trained match is used here.`;
           }
@@ -329,10 +450,25 @@ go.onclick = async () => {
 
     if (r.group !== "none" && r.scientific_name) {
       step("inat", "on");
-      r.inat = await inaturalist(r.scientific_name, await coordsP);
+      r.inat = await inaturalist(r.scientific_name, coords);
       if (r.inat) {
         r.taxonomy = { ...(r.taxonomy || {}), ...Object.fromEntries(Object.entries(r.inat.taxonomy).filter(([, v]) => v)) };
         if (!r.common_name && r.inat.common) r.common_name = r.inat.common;
+      }
+      // Native or invasive: iNaturalist's local checklists first, Claude's knowledge as a backup.
+      if (loc) {
+        r.placeLabel = loc.label;
+        const claudeSays = ["native", "introduced", "invasive"].includes(r.native_status) ? r.native_status : null;
+        const inatSays = r.inat ? await nativeStatus(r.inat.id).catch(() => null) : null;
+        if (inatSays?.status === "native") {
+          Object.assign(r, { status: "native", statusPlace: inatSays.place, statusSource: "iNaturalist" });
+        } else if (inatSays?.status === "introduced") {
+          Object.assign(r, { status: claudeSays === "invasive" ? "invasive" : "introduced", statusPlace: inatSays.place, statusSource: "iNaturalist" });
+        } else if (claudeSays) {
+          Object.assign(r, { status: claudeSays, statusSource: "Claude's estimate", statusNote: r.native_note || "" });
+        } else {
+          r.status = "unknown";
+        }
       }
       step("inat", "done");
     } else {
