@@ -5,25 +5,26 @@ export default handler(async (body) => {
   const img = readImage(body);
   const where = cleanWhere(body.where);
 
-  const prompt = `You are an expert naturalist. Identify the main living organism in this photo.
+  const prompt = `You are an expert naturalist. First decide whether the main subject of this photo is a real, living (or once-living) plant or animal.
 ${where ? `The photographer says where they saw it: "${where}". Use it only as context.` : ""}
-Reply with ONLY a JSON object of this shape:
-{"group": "plant" | "animal" | "fungus" | "none",
- "category": "Plant" | "Tree" | "Flower" | "Mammal" | "Bird" | "Reptile" | "Amphibian" | "Fish" | "Insect" | "Spider" | "Other animal" | "Fungus",
+If it is NOT a plant or animal (for example an object, a person's face, food, a building, a toy, a drawing, a screenshot, a mushroom or other fungus, or nothing clear), reply with exactly {"group": "none"} and nothing else.
+Otherwise reply with ONLY a JSON object of this shape:
+{"group": "plant" | "animal",
+ "category": "Plant" | "Tree" | "Flower" | "Mammal" | "Bird" | "Reptile" | "Amphibian" | "Fish" | "Insect" | "Spider" | "Other animal",
  "common_name": string,
  "scientific_name": "Genus species (or Genus sp. if unsure of species)",
  "confidence": integer 0-100,
  "taxonomy": {"kingdom": string, "family": string, "genus": string},
  ${DESCRIBE_SHAPE}}
 "group" is "plant" for any plant, tree, flower, grass, fern, moss or cactus.
-If no living organism is visible, use group "none", common_name "No organism found", confidence 0, and explain briefly in fun_fact.
 Lower confidence for blurry photos or species that are hard to tell apart.`;
 
   const result = await askClaude([
     { type: "image", source: { type: "base64", media_type: img.mediaType, data: img.data } },
     { type: "text", text: prompt },
   ]);
-  if (!["plant", "animal", "fungus", "none"].includes(result.group)) result.group = "animal";
+  // Anything that isn't clearly a plant or animal gets no details at all.
+  if (result.group !== "plant" && result.group !== "animal") return { group: "none" };
   return result;
 });
 
