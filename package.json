@@ -1,0 +1,10 @@
+{
+  "name": "native-nature",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Identify plants and animals from a photo with Claude, Pl@ntNet and iNaturalist.",
+  "engines": {
+    "node": ">=18"
+  }
+}
