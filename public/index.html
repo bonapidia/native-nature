@@ -390,9 +390,23 @@ const KEEP = new Set(["Plantae", ...ANIMALS.split(","), "Animalia"]);
 const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } } };
 
 const cache = new Map();
-async function getJSON(url) {
+async function getJSON(url, ms = 12000) {
   if (cache.has(url)) return cache.get(url);
-  const p = fetch(url).then((r) => { if (!r.ok) throw new Error("iNaturalist didn't answer. Try again in a moment."); return r.json(); });
+  // Never wait forever: give up after `ms` with a clear message.
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), ms);
+  const p = fetch(url, { signal: ctl.signal })
+    .then((r) => {
+      if (r.status === 429) throw new Error("iNaturalist is busy right now. Wait a minute and try again.");
+      if (!r.ok) throw new Error("iNaturalist didn't answer. Try again in a moment.");
+      return r.json();
+    })
+    .catch((e) => {
+      console.warn("Request failed:", url, e);
+      if (e.name === "AbortError") throw new Error("iNaturalist is taking too long to answer. Check your internet and try again.");
+      if (e instanceof TypeError) throw new Error("Couldn't reach iNaturalist. Check your internet connection, or turn off any ad or content blocker for this site.");
+      throw e;
+    })
+    .finally(() => clearTimeout(timer));
   cache.set(url, p); p.catch(() => cache.delete(url));
   return p;
 }
@@ -648,17 +662,21 @@ locListeners.push(() => { if ($("p-bloom").classList.contains("on")) loadBloom(t
 /* =========================================================
    Identify a Species (search)
    ========================================================= */
-let searchT;
+let searchT, searchRun = 0;
 async function runSearch(q) {
-  const st = $("searchStatus"), out = $("searchTiles");
-  if (q.length < 2) { setMsg(st, ""); out.innerHTML = ""; return; }
+  const st = $("searchStatus"), out = $("searchTiles"), run = ++searchRun;
+  if (q.length < 2) { setMsg(st, q ? "Type at least 2 letters." : ""); out.innerHTML = ""; return; }
   setMsg(st, "Searching…");
+  const enc = encodeURIComponent(q);
   try {
-    const d = await getJSON(`${INAT}/taxa/autocomplete?q=${encodeURIComponent(q)}&per_page=20&is_active=true`);
+    let d;
+    try { d = await getJSON(`${INAT}/taxa/autocomplete?q=${enc}&per_page=20`, 8000); }
+    catch { if (run !== searchRun) return; setMsg(st, "Still searching…"); d = await getJSON(`${INAT}/taxa?q=${enc}&per_page=20`); }
+    if (run !== searchRun) return; // a newer search started; ignore this one
     const list = (d.results || []).filter((t) => KEEP.has(t.iconic_taxon_name)).map((t) => tileData(t, t.observations_count));
-    setMsg(st, list.length ? "Tap a species to see details." : `No plants or animals match "${q}".`);
+    setMsg(st, list.length ? `${list.length} match${list.length === 1 ? "" : "es"}. Tap a species to see details.` : `No plants or animals match "${q}". Try another spelling or a shorter name.`);
     out.innerHTML = tilesInner(list);
-  } catch (e) { setMsg(st, e.message, true); }
+  } catch (e) { if (run === searchRun) { setMsg(st, e.message, true); out.innerHTML = ""; } }
 }
 $("searchQ").oninput = (e) => { clearTimeout(searchT); searchT = setTimeout(() => runSearch(e.target.value.trim()), 350); };
 $("searchForm").onsubmit = (e) => { e.preventDefault(); clearTimeout(searchT); runSearch($("searchQ").value.trim()); };
