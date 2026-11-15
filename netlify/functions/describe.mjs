@@ -15,7 +15,7 @@ Reply with ONLY a JSON object of this shape:
  "category": "Plant" | "Tree" | "Flower",
  ${statusShape(place)}${DESCRIBE_SHAPE}}`;
 
-  return askClaude([{ type: "text", text: prompt }], 600);
+  return askClaude([{ type: "text", text: prompt }], 1100);
 });
 
 export const config = { path: "/api/describe" };

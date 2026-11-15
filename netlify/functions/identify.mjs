@@ -23,7 +23,7 @@ Lower confidence for blurry photos or species that are hard to tell apart.`;
   const result = await askClaude([
     { type: "image", source: { type: "base64", media_type: img.mediaType, data: img.data } },
     { type: "text", text: prompt },
-  ]);
+  ], 1300);
   // Anything that isn't clearly a plant or animal gets no details at all.
   if (result.group !== "plant" && result.group !== "animal") return { group: "none" };
   return result;

@@ -76,13 +76,18 @@ ${list(natives)}
 Non-native plants recorded in their area:
 ${list(introduced) || "none listed"}
 
-Call the plant_list tool with 6 picks from the native list, 0-4 plants to avoid from the non-native list (only ones that are invasive here and often sold in garden stores), and a buying tip.
-If the household has young kids or pets, never pick toxic or spiny plants. Match the sunlight, water, space and plant types.
+Call the plant_list tool with 8 picks from the native list, 0-4 plants to avoid from the non-native list (only ones that are invasive here and often sold in garden stores), and a buying tip.
+${family.includes("young kids") ? "They have young kids: EVERY pick must be non-toxic and free of spines or thorns (kid_safe true). " : ""}${family.some((f) => f === "dogs" || f === "cats") ? "They have pets: EVERY pick must be non-toxic to dogs and cats (pet_safe true). " : ""} Match the sunlight, water, space and plant types.
 Keep every text field under 20 words.`;
 
   const out = await askClaude([{ type: "text", text: prompt }], 3000, fastModel(), TOOL);
   // Only keep picks that really are on the local native list.
-  out.picks = (Array.isArray(out.picks) ? out.picks : []).filter((p) => natives.some((n) => sameSpecies(n.sci, p?.scientific_name))).slice(0, 8);
+  const kids = family.includes("young kids"), pets = family.some((f) => f === "dogs" || f === "cats");
+  out.picks = (Array.isArray(out.picks) ? out.picks : [])
+    .filter((p) => natives.some((n) => sameSpecies(n.sci, p?.scientific_name)))
+    // Never show a plant that's unsafe for the family they told us about.
+    .filter((p) => (!kids || p.kid_safe === true) && (!pets || p.pet_safe === true))
+    .slice(0, 8);
   if (!out.picks.length) throw new HttpError(502, "Couldn't build a plant list this time. Try again.");
   out.avoid = (Array.isArray(out.avoid) ? out.avoid : []).filter((a) => introduced.some((n) => sameSpecies(n.sci, a?.scientific_name))).slice(0, 4);
   return out;

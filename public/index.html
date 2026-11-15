@@ -144,6 +144,10 @@ h2.h{font:600 clamp(1.7rem,4vw,2.3rem)/1.1 var(--f-display);margin:0 0 4px;color
 .safety{background:var(--invasive-bg);color:var(--invasive);border-radius:10px;padding:10px 12px;font-weight:500}
 .note{font-size:.9rem;color:var(--muted);margin:0}
 
+.ychk{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:6px}
+.ychk li{display:flex;gap:8px;align-items:baseline}
+.ychk .you{font-size:.8rem;color:var(--gold);margin-left:4px}
+
 /* Guided key */
 .q{font:600 clamp(1.6rem,4vw,2.2rem)/1.15 var(--f-display);margin:6px 0 18px;color:#f6ecd3}
 .answers{display:flex;gap:10px;flex-wrap:wrap}
@@ -901,8 +905,37 @@ const EXAMPLE = {
   key_features: ["Spikes of blue pea-shaped flowers with white tips", "Palm-shaped leaves with 5 leaflets", "Grows 30 to 45 cm tall in spring"],
   habitat: "Open fields, roadsides and prairies across central Texas; blooms March to April.",
   fun_fact: "It is the state flower of Texas, and the white spot on each flower turns reddish purple after it has been pollinated.",
-  safety: "Seeds are toxic if eaten; keep them away from pets and small kids.", similar: ["Sandyland bluebonnet", "Big Bend bluebonnet"]
+  safety: "Seeds are toxic if eaten; keep them away from pets and small kids.", similar: ["Sandyland bluebonnet", "Big Bend bluebonnet"],
+  yard: { kid_safe: false, pet_safe: false, safety_note: "Seeds and pods are toxic if eaten.", attracts: ["bees", "butterflies"], plant_type: "Flower",
+    sun: "full sun", water: "low water", size: "1 to 1.5 ft tall", yard_role: "Early spring nectar for bees, and it reseeds itself every year." }
 };
+// "For your yard": safety and garden details, matched against the Yard Planner answers.
+function yardBox(r) {
+  const y = r.yard;
+  if (!y || typeof y !== "object") return "";
+  const prefs = store.get("nn-yard", null) || {};
+  const fam = prefs.family || [], want = (prefs.attract || []).map((a) => a.split(/[ ,]/)[0].toLowerCase());
+  const kids = fam.includes("young kids"), pets = fam.includes("dogs") || fam.includes("cats");
+  const you = (t) => `<span class="you">${t}</span>`;
+  const items = [];
+  const safe = (ok, label, mine, mineLabel) => items.push(ok === true
+    ? `<li class="ok">✓ <span>Safe for ${label}${mine ? you(mineLabel) : ""}</span></li>`
+    : ok === false ? `<li class="warn">⚠ <span>Not safe for ${label}${y.safety_note ? `: ${esc(y.safety_note)}` : ""}${mine ? you(`You said you have ${label === "young kids" ? "young kids" : "pets"}. Keep it out of reach.`) : ""}</span></li>` : "");
+  safe(y.kid_safe, "young kids", kids, "Good for your kids");
+  safe(y.pet_safe, "dogs and cats", pets, "Good for your pets");
+  if (r.group === "plant") {
+    const att = Array.isArray(y.attracts) ? y.attracts : [];
+    if (att.length) items.push(`<li>🦋 <span>Attracts ${att.map((a) => esc(a) + (want.includes(String(a).split(/[ ,]/)[0].toLowerCase()) ? you("you want this") : "")).join(", ")}</span></li>`);
+    const fit = (v, pref) => (v && pref && v === pref ? you("matches your yard") : "");
+    const grow = [y.sun ? `Sun: ${esc(y.sun)}${fit(y.sun, prefs.sun)}` : "", y.water ? `Water: ${esc(y.water)}${fit(y.water, prefs.water)}` : ""].filter(Boolean).join(" · ");
+    if (grow) items.push(`<li>☀️ <span>${grow}</span></li>`);
+  }
+  if (y.size) items.push(`<li>📏 <span>${esc(y.size)}</span></li>`);
+  if (y.yard_role) items.push(`<li>🌱 <span>${esc(y.yard_role)}</span></li>`);
+  if (!items.length) return "";
+  return `<div class="sec"><h4>For your yard${y.plant_type && r.group === "plant" ? ` · ${esc(y.plant_type)}` : ""}</h4><ul class="ychk">${items.join("")}</ul>
+    ${!prefs.family ? `<p class="small" style="margin:6px 0 0">Fill out the <a href="#yard" onclick="showTab('yard');return false">Yard Planner</a> to see how this fits your family.</p>` : ""}</div>`;
+}
 function render(r) {
   const t = r.taxonomy || {}, conf = Math.max(0, Math.min(100, Number(r.confidence) || 0)), inat = r.inat;
   const rows = [["Kingdom", t.kingdom], ["Class", t.class], ["Order", t.order], ["Family", t.family], ["Genus", t.genus]].filter(([, v]) => v)
@@ -922,6 +955,7 @@ function render(r) {
       ${inat.nearby != null ? `<div><b>${fmt(inat.nearby)}</b><span>within 50 km of ${esc(r.placeLabel || "you")}</span></div>` : ""}
       ${inat.conservation ? `<div><b>${esc(inat.conservation)}</b><span>conservation status</span></div>` : ""}</div>` : ""}
     ${r.safety && !/^none\b/i.test(r.safety) ? `<div class="safety">⚠ ${esc(r.safety)}</div>` : ""}
+    ${yardBox(r)}
     ${Array.isArray(r.key_features) && r.key_features.length ? `<div class="sec"><h4>How to tell</h4><ul>${r.key_features.map((f) => `<li>${esc(f)}</li>`).join("")}</ul></div>` : ""}
     ${r.habitat ? `<div class="sec"><h4>Habitat and range</h4><p>${esc(r.habitat)}</p></div>` : ""}
     ${r.fun_fact ? `<div class="sec"><h4>Fun fact</h4><p>${esc(r.fun_fact)}</p></div>` : ""}
