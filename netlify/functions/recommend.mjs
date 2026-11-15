@@ -6,6 +6,45 @@ const clean = (s, n = 80) => (typeof s === "string" ? s.replace(/["\n\r]/g, " ")
 const sameSpecies = (a, b) =>
   clean(a).toLowerCase().split(/\s+/).slice(0, 2).join(" ") === clean(b).toLowerCase().split(/\s+/).slice(0, 2).join(" ");
 
+const str = (d) => ({ type: "string", description: d });
+const TOOL = {
+  name: "plant_list",
+  description: "Return the plant shopping list for this family's yard.",
+  input_schema: {
+    type: "object",
+    required: ["summary", "picks", "avoid", "buying_tip"],
+    properties: {
+      summary: str("2 short sentences on the overall plan"),
+      picks: {
+        type: "array", minItems: 1, maxItems: 8,
+        items: {
+          type: "object",
+          required: ["scientific_name", "common_name", "type", "why", "kid_safe", "pet_safe"],
+          properties: {
+            scientific_name: str("exactly as written in the native list"),
+            common_name: str("common name"),
+            type: { type: "string", enum: ["Flower", "Shrub", "Tree", "Grass", "Vine", "Groundcover"] },
+            why: str("one sentence on why it fits this family and yard"),
+            attracts: { type: "array", items: { type: "string" }, maxItems: 3 },
+            kid_safe: { type: "boolean", description: "true if non-toxic and free of spines or thorns" },
+            pet_safe: { type: "boolean", description: "true if non-toxic to dogs and cats" },
+            safety_note: str("short warning if not kid- or pet-safe, else empty"),
+            sun: str("short"),
+            size: str("mature size, short"),
+            tip: str("one short planting or care tip"),
+          },
+        },
+      },
+      avoid: {
+        type: "array", maxItems: 4,
+        items: { type: "object", required: ["scientific_name", "common_name", "why"],
+          properties: { scientific_name: str("exactly as in the non-native list"), common_name: str("common name"), why: str("one short sentence") } },
+      },
+      buying_tip: str("1-2 sentences on where to buy native plants in this region (types of places, not store names you are unsure of)"),
+    },
+  },
+};
+
 export default handler(async (body) => {
   const place = cleanWhere(body.place);
   if (!place) throw new HttpError(400, "Set your location first.");
@@ -37,21 +76,11 @@ ${list(natives)}
 Non-native plants recorded in their area:
 ${list(introduced) || "none listed"}
 
-Reply with ONLY a JSON object:
-{"summary": "2 sentences on the overall plan",
- "picks": [6-8 objects: {"scientific_name": exactly as in the native list, "common_name": string,
-   "type": "Flower" | "Shrub" | "Tree" | "Grass" | "Vine" | "Groundcover",
-   "why": "one sentence on why it fits this family and yard",
-   "attracts": [1-3 short strings],
-   "kid_safe": true if non-toxic and free of spines or thorns, else false,
-   "pet_safe": true if non-toxic to dogs and cats, else false,
-   "safety_note": "short warning if not kid- or pet-safe, else empty string",
-   "sun": "short", "size": "mature size, short", "tip": "one short planting or care tip"}],
- "avoid": [0-4 objects from the non-native list that are invasive here and often sold in garden stores: {"common_name": string, "scientific_name": string, "why": "one short sentence"}],
- "buying_tip": "one or two sentences on where to buy native plants in this region (types of places, not specific store names you are unsure of)"}
-If the household has young kids or pets, never pick toxic or spiny plants. Match the sunlight, water, space and plant types. Keep every string short.`;
+Call the plant_list tool with 6 picks from the native list, 0-4 plants to avoid from the non-native list (only ones that are invasive here and often sold in garden stores), and a buying tip.
+If the household has young kids or pets, never pick toxic or spiny plants. Match the sunlight, water, space and plant types.
+Keep every text field under 20 words.`;
 
-  const out = await askClaude([{ type: "text", text: prompt }], 1600, fastModel());
+  const out = await askClaude([{ type: "text", text: prompt }], 3000, fastModel(), TOOL);
   // Only keep picks that really are on the local native list.
   out.picks = (Array.isArray(out.picks) ? out.picks : []).filter((p) => natives.some((n) => sameSpecies(n.sci, p?.scientific_name))).slice(0, 8);
   if (!out.picks.length) throw new HttpError(502, "Couldn't build a plant list this time. Try again.");
