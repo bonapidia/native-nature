@@ -1242,16 +1242,31 @@ function tileUrls(lat, lng) {
   return urls;
 }
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
-let saving = false;
+let saving = null; // { full, quiet, started } while a save is running
+let fullAfter = false; // a full save was asked for while a quick one was running
+// Download one photo or map piece into the offline storage, but never wait more than 10 seconds.
+function warm(u) {
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 10000);
+  return fetch(u, { mode: "no-cors", signal: ctl.signal }).finally(() => clearTimeout(t));
+}
 // full = everything (key, photos, map). Quick saves refresh only the species lists and flowers.
 async function saveArea(full = true, quiet = false) {
-  const msg = $("saveMsg"), bar = $("saveBar"), btn = $("saveOff");
-  if (saving) return;
+  const msg = $("saveMsg"), bar = $("saveBar");
+  if (saving && Date.now() - saving.started > 5 * 60 * 1000) saving = null; // a stuck save never blocks forever
+  if (saving) {
+    if (!quiet) {
+      // Already saving in the background: show its progress instead of blocking the button.
+      saving.quiet = false; bar.hidden = false;
+      if (full && !saving.full) { fullAfter = true; msg.textContent = "Finishing a quick save first, then saving everything…"; }
+      else msg.textContent = "Already saving your area…";
+    }
+    return;
+  }
   if (!loc) { if (!quiet) msg.textContent = "Set your location first."; return; }
   if (isOffline()) { if (!quiet) msg.textContent = "Connect to the internet to save your area."; return; }
   if (!("serviceWorker" in navigator) || !navigator.serviceWorker.controller) { if (!quiet) msg.textContent = "Reload the page once, then try again (the offline helper is still starting)."; return; }
-  saving = true; btn.disabled = true; if (!quiet) bar.hidden = false;
-  const say = (t) => { if (!quiet) msg.textContent = t; };
+  saving = { full, quiet, started: Date.now() }; if (!quiet) bar.hidden = false;
+  const job = saving, say = (t) => { if (!job.quiet) msg.textContent = t; };
   const ends = full ? keyEnds() : [], total = full ? 2 + ends.length + 3 : 2;
   let doneSteps = 0;
   const tick = (label) => { doneSteps++; bar.firstElementChild.style.width = Math.round((doneSteps / total) * 100) + "%"; say(label); };
@@ -1269,21 +1284,25 @@ async function saveArea(full = true, quiet = false) {
     const before = new Set(full ? [] : (offlineIdx?.species || []).map((s) => s.photo));
     const photos = [...species.values()].map((s) => s.photo).filter((u) => u && !before.has(u));
     say(`Saving ${photos.length} photos…`);
-    for (let i = 0; i < photos.length; i += 8) await Promise.allSettled(photos.slice(i, i + 8).map((u) => fetch(u, { mode: "no-cors" })));
+    for (let i = 0; i < photos.length; i += 8) { await Promise.allSettled(photos.slice(i, i + 8).map(warm)); if (photos.length > 8) say(`Saving photos… ${Math.min(i + 8, photos.length)} of ${photos.length}`); }
     if (full) {
       tick("Saving the map…");
       const tilesList = tileUrls(loc.lat, loc.lng);
-      for (let i = 0; i < tilesList.length; i += 8) await Promise.allSettled(tilesList.slice(i, i + 8).map((u) => fetch(u, { mode: "no-cors" })));
+      for (let i = 0; i < tilesList.length; i += 8) await Promise.allSettled(tilesList.slice(i, i + 8).map(warm));
       tick("Saving the site…");
     }
     const now = new Date().toISOString();
     offlineIdx = { label: loc.label, region: reg.place?.short || loc.label, savedAt: now, fullAt: full ? now : (sameArea ? offlineIdx?.fullAt : null), species: [...species.values()] };
     store.set("nn-offline", offlineIdx);
-    if (full && !quiet) msg.textContent = `Saved ${species.size} species, ${photos.length} photos and the map around ${loc.label}. These now work without internet.`;
+    if (full && !job.quiet) msg.textContent = `Saved ${species.size} species, ${photos.length} photos and the map around ${loc.label}. These now work without internet.`;
     else showSavedInfo();
   } catch (e) {
-    if (!quiet) msg.textContent = `Saving stopped: ${e.message} Try again.`;
-  } finally { saving = false; btn.disabled = false; setTimeout(() => (bar.hidden = true), 1500); }
+    if (!job.quiet) msg.textContent = `Saving stopped: ${e.message} Try again.`;
+  } finally {
+    if (saving === job) saving = null;
+    setTimeout(() => (bar.hidden = true), 1500);
+    if (fullAfter) { fullAfter = false; saveArea(true, false); }
+  }
 }
 $("saveOff").onclick = () => saveArea(true, false);
 function showSavedInfo() {
@@ -1310,7 +1329,7 @@ function onlineState() {
   if (!isOffline()) drainQueue();
 }
 addEventListener("online", onlineState); addEventListener("offline", onlineState); onlineState();
-navigator.serviceWorker?.ready.then(() => setTimeout(autoSave, 5000)); // first auto-save shortly after the page opens
+navigator.serviceWorker?.ready.then(() => setTimeout(autoSave, 20000)); // first auto-save shortly after the page opens
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch((e) => console.warn("Offline helper didn't start:", e)));
 }
