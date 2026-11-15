@@ -16,10 +16,15 @@ export default handler(async (body) => {
 
   if (res.status === 404) return { matches: [] }; // Pl@ntNet found no plant it recognizes
   if (!res.ok) {
-    console.error("Pl@ntNet error", res.status, (await res.text()).slice(0, 300));
+    const raw = (await res.text()).slice(0, 300);
+    console.error("Pl@ntNet error", res.status, raw);
+    // Pass along Pl@ntNet's own reason (it never contains the key) so problems are easy to spot.
+    let reason = "";
+    try { const j = JSON.parse(raw); reason = String(j.message || j.error || "").replace(/api-key=[^&\s]+/gi, "api-key=…").slice(0, 160); } catch {}
+    const why = reason ? `: "${reason}"` : "";
     if (res.status === 429) throw new HttpError(429, "Pl@ntNet's daily limit was reached. Try again tomorrow.");
-    if (res.status === 401 || res.status === 403) throw new HttpError(500, "the Pl@ntNet key in Netlify settings was rejected");
-    throw new HttpError(502, "Pl@ntNet couldn't be reached.");
+    if (res.status === 401 || res.status === 403) throw new HttpError(500, `Pl@ntNet rejected the key (error ${res.status}${why})`);
+    throw new HttpError(502, `Pl@ntNet had a problem (error ${res.status}${why})`);
   }
 
   const data = await res.json();
