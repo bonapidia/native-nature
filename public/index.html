@@ -151,6 +151,21 @@ h2.h{font:600 clamp(1.7rem,4vw,2.3rem)/1.1 var(--f-display);margin:0 0 4px;color
 .trail{list-style:none;padding:0;margin:0 0 14px;display:flex;flex-wrap:wrap;gap:6px}
 .trail li{font-size:.82rem;color:var(--muted);background:var(--card2);border-radius:999px;padding:4px 10px}
 
+/* Yard planner */
+.yform{display:grid;gap:14px}
+fieldset{border:0;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+legend{font-size:.86rem;color:var(--muted);margin-bottom:8px;width:100%}
+fieldset label{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--card2);border-radius:999px;padding:7px 14px;cursor:pointer;font-size:.92rem}
+fieldset label:has(input:checked){border-color:var(--green);background:rgba(125,184,147,.16)}
+fieldset input{accent-color:var(--green);margin:0}
+.buy{display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px;background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:10px}
+.buy .ph{all:unset;cursor:pointer;width:96px;height:96px;border-radius:10px;background:#0a1510 center/cover no-repeat}
+.buy h4{font:600 1.3rem/1.1 var(--f-display);margin:0}
+.buy p{margin:4px 0 0;font-size:.92rem}
+.buy .meta{font-size:.82rem;color:var(--muted)}
+.ok{color:var(--native)}.warn{color:var(--invasive)}
+@media (max-width:480px){.buy{grid-template-columns:72px minmax(0,1fr)}.buy .ph{width:72px;height:72px}}
+
 /* Records */
 .recs{display:grid;gap:10px}
 .rec{display:grid;grid-template-columns:72px minmax(0,1fr) auto;gap:14px;align-items:center;background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:10px}
@@ -197,6 +212,7 @@ footer .wrap{display:grid;gap:4px}
     <button class="tab" role="tab" data-tab="bloom">In Bloom Now</button>
     <button class="tab" role="tab" data-tab="search">Identify a Species</button>
     <button class="tab" role="tab" data-tab="key">Guided ID Key</button>
+    <button class="tab" role="tab" data-tab="yard">🌱 Yard Planner</button>
     <button class="tab" role="tab" data-tab="record">Camera Record</button>
   </nav>
 </div>
@@ -279,6 +295,50 @@ footer .wrap{display:grid;gap:4px}
     </div>
   </section>
 
+  <!-- YARD PLANNER -->
+  <section class="panel" id="p-yard" role="tabpanel">
+    <div class="split">
+      <form class="card yform" id="yardForm">
+        <h2 class="h">Yard Planner</h2>
+        <p class="lead" style="margin:0">Tell us about your family and yard, and we'll suggest native plants to buy. Every pick is a plant that really grows wild near you.</p>
+        <fieldset><legend>Who lives with you?</legend>
+          <label><input type="checkbox" name="family" value="young kids"> Young kids</label>
+          <label><input type="checkbox" name="family" value="dogs"> Dogs</label>
+          <label><input type="checkbox" name="family" value="cats"> Cats</label></fieldset>
+        <fieldset><legend>What do you want to attract?</legend>
+          <label><input type="checkbox" name="attract" value="birds" checked> Birds</label>
+          <label><input type="checkbox" name="attract" value="butterflies" checked> Butterflies</label>
+          <label><input type="checkbox" name="attract" value="bees and pollinators"> Bees</label>
+          <label><input type="checkbox" name="attract" value="hummingbirds"> Hummingbirds</label>
+          <label><input type="checkbox" name="attract" value="lizards, toads and small wildlife"> Lizards and toads</label></fieldset>
+        <fieldset><legend>What kinds of plants do you want?</legend>
+          <label><input type="checkbox" name="types" value="flowers" checked> Flowers</label>
+          <label><input type="checkbox" name="types" value="shrubs"> Shrubs</label>
+          <label><input type="checkbox" name="types" value="trees"> Trees</label>
+          <label><input type="checkbox" name="types" value="grasses"> Grasses</label>
+          <label><input type="checkbox" name="types" value="vines"> Vines</label>
+          <label><input type="checkbox" name="types" value="groundcover"> Groundcover</label></fieldset>
+        <fieldset><legend>How much sun?</legend>
+          <label><input type="radio" name="sun" value="full sun" checked> Full sun</label>
+          <label><input type="radio" name="sun" value="part shade"> Part shade</label>
+          <label><input type="radio" name="sun" value="full shade"> Shade</label></fieldset>
+        <fieldset><legend>Watering</legend>
+          <label><input type="radio" name="water" value="low water" checked> Low water</label>
+          <label><input type="radio" name="water" value="normal watering"> Normal</label></fieldset>
+        <fieldset><legend>How much space?</legend>
+          <label><input type="radio" name="space" value="small yard or containers"> Small or pots</label>
+          <label><input type="radio" name="space" value="medium yard" checked> Medium</label>
+          <label><input type="radio" name="space" value="large yard"> Large</label></fieldset>
+        <div class="row"><button class="btn primary" type="submit" id="yardGo">Get my plant list</button></div>
+        <div class="status" id="yardStatus" aria-live="polite"></div>
+      </form>
+      <div class="card" id="yardOut">
+        <span class="eyebrow">Your shopping list</span>
+        <p class="lead" style="margin:6px 0 0">Choose your answers and tap <b>Get my plant list</b>. You'll get 6 to 8 native plants that fit your yard, with kid and pet safety, plus invasive plants to skip at the store.</p>
+      </div>
+    </div>
+  </section>
+
   <!-- CAMERA RECORD -->
   <section class="panel" id="p-record" role="tabpanel">
     <div class="card">
@@ -338,7 +398,7 @@ function setMsg(el, msg, err) { el.textContent = msg || ""; el.classList.toggle(
 /* =========================================================
    Tabs
    ========================================================= */
-const TABS = ["map", "photo", "bloom", "search", "key", "record"];
+const TABS = ["map", "photo", "bloom", "search", "key", "yard", "record"];
 const opened = new Set();
 function showTab(t) {
   if (!TABS.includes(t)) t = "map";
@@ -662,6 +722,78 @@ async function keyResults(node) {
     $("kTiles").innerHTML = tiles(list);
   } catch (e) { setMsg(st, e.message, true); }
 }
+
+/* =========================================================
+   Yard Planner
+   ========================================================= */
+const yardSaved = store.get("nn-yard", null);
+if (yardSaved) {
+  const f = $("yardForm");
+  f.querySelectorAll("input").forEach((i) => {
+    const v = yardSaved[i.name];
+    i.checked = Array.isArray(v) ? v.includes(i.value) : v === i.value;
+  });
+}
+const nameOf = (p) => (p.common && p.common !== p.name ? p.common : p.name);
+async function localPlants() {
+  // Native plants recorded in the most specific region that has enough of them.
+  for (const pl of (loc.places || []).filter((p) => p.level >= 10)) {
+    const natives = await speciesCounts({ place_id: pl.id, native: "true", iconic_taxa: "Plantae" }, 80);
+    if (natives.length >= 25) {
+      const introduced = await speciesCounts({ place_id: pl.id, introduced: "true", iconic_taxa: "Plantae" }, 40).catch(() => []);
+      return { natives, introduced, region: pl.short };
+    }
+  }
+  return null;
+}
+$("yardForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const f = new FormData(e.target), st = $("yardStatus"), out = $("yardOut");
+  const prefs = { family: f.getAll("family"), attract: f.getAll("attract"), types: f.getAll("types"), sun: f.get("sun"), water: f.get("water"), space: f.get("space") };
+  store.set("nn-yard", prefs);
+  if (!loc) { setMsg(st, "Set your location at the top of the page first.", true); return; }
+  $("yardGo").disabled = true;
+  try {
+    setMsg(st, "Finding native plants near you…");
+    const local = await localPlants();
+    if (!local) throw new Error("Not enough native plants are recorded in your area yet. Try a nearby bigger city as your location.");
+    setMsg(st, `Choosing the best plants for your yard from ${local.natives.length} natives in ${local.region}…`);
+    const toList = (arr) => arr.map((p) => ({ sci: p.name, common: p.common }));
+    const r = await api("/api/recommend", { place: loc.label, natives: toList(local.natives), introduced: toList(local.introduced), ...prefs });
+    const find = (sci, arr) => arr.find((p) => sameSpecies(p.name, sci));
+    out.innerHTML = `<span class="eyebrow">Native plants for ${esc(local.region)}</span><h2 class="h">Your shopping list</h2>
+      ${r.summary ? `<p class="lead">${esc(r.summary)}</p>` : ""}
+      <div class="recs">${r.picks.map((p) => {
+        const t = find(p.scientific_name, local.natives);
+        const safe = (p.kid_safe ? `<span class="ok">✓ Kid-safe</span>` : `<span class="warn">⚠ Not kid-safe</span>`) + " · " +
+                     (p.pet_safe ? `<span class="ok">✓ Pet-safe</span>` : `<span class="warn">⚠ Not pet-safe</span>`);
+        return `<div class="buy">
+          <button class="ph" type="button" ${t ? `data-taxon="${t.id}"` : ""} aria-label="About ${esc(p.common_name)}" style="background-image:url('${esc(t?.photo || "")}')"></button>
+          <div style="min-width:0"><div class="row"><span class="pill">${esc(p.type || "Plant")}</span><span class="pill native">Native</span></div>
+            <h4 style="margin-top:6px">${esc(p.common_name || t?.common || p.scientific_name)}</h4><i class="small">${esc(p.scientific_name)}</i>
+            <p>${esc(p.why || "")}</p>
+            ${Array.isArray(p.attracts) && p.attracts.length ? `<p class="meta">Attracts: ${p.attracts.map(esc).join(", ")}</p>` : ""}
+            <p class="meta">${[p.sun, p.size].filter(Boolean).map(esc).join(" · ")}</p>
+            <p class="meta">${safe}${p.safety_note ? ` ${esc(p.safety_note)}` : ""}</p>
+            ${p.tip ? `<p class="meta">Tip: ${esc(p.tip)}</p>` : ""}</div></div>`;
+      }).join("")}</div>
+      ${r.avoid?.length ? `<div class="group"><h3><span class="dot" style="background:var(--invasive)"></span>Don't buy these</h3>
+        <p class="small" style="margin:0">They're sold in some stores but spread into the wild here.</p>
+        <ul style="margin:0;padding-left:1.2em">${r.avoid.map((a) => `<li><b>${esc(a.common_name || a.scientific_name)}</b> <i class="small">${esc(a.scientific_name)}</i>: ${esc(a.why || "")}</li>`).join("")}</ul></div>` : ""}
+      <div class="group"><h3>Where to buy</h3>
+        ${r.buying_tip ? `<p style="margin:0">${esc(r.buying_tip)}</p>` : ""}
+        <div class="row"><a class="btn" style="text-decoration:none" target="_blank" rel="noopener" href="https://www.google.com/maps/search/${encodeURIComponent("native plant nursery near " + loc.label)}">Find native plant nurseries near you</a>
+          <button class="btn" type="button" id="yardCopy">Copy list</button></div></div>
+      <p class="small" style="margin-top:14px">Suggestions by Claude from native plants recorded on iNaturalist. Check plant tags for safety before buying.</p>`;
+    $("yardCopy").onclick = async () => {
+      const text = r.picks.map((p) => `- ${p.common_name} (${p.scientific_name})`).join("\n");
+      try { await navigator.clipboard.writeText(`Native plants for ${loc.label}:\n${text}`); $("yardCopy").textContent = "Copied ✓"; } catch { $("yardCopy").textContent = "Couldn't copy"; }
+    };
+    setMsg(st, "");
+    if (innerWidth < 820) out.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (err) { setMsg(st, err.message, true); }
+  finally { $("yardGo").disabled = false; }
+};
 
 /* =========================================================
    Camera Record

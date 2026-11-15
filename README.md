@@ -9,6 +9,7 @@ Native plants, wildlife, and invasive species, anywhere on Earth.
 | **In Bloom Now** | Plants photographed flowering within 50 km of you in the last 30 days. |
 | **Identify a Species** | Search by name for photos, facts, and native status. |
 | **Guided ID Key** | Yes/no questions that narrow down what you saw, then show matching species near you. |
+| **Yard Planner** | Tell it about your family (kids, pets) and yard (sun, space, what you want to attract), and it suggests native plants to buy, plus invasive ones to avoid. |
 | **Camera Record** | Your sightings log, saved in your browser. Export to CSV. |
 
 The site asks for your location once (or you can type a city) and remembers it in your browser.
