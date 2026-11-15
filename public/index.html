@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Native Nature</title>
 <meta name="description" content="Native plants, wildlife, and invasive species, anywhere on Earth.">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#12271e">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Jost:wght@300;400;500;600&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -155,6 +161,12 @@ h2.h{font:600 clamp(1.7rem,4vw,2.3rem)/1.1 var(--f-display);margin:0 0 4px;color
 .trail{list-style:none;padding:0;margin:0 0 14px;display:flex;flex-wrap:wrap;gap:6px}
 .trail li{font-size:.82rem;color:var(--muted);background:var(--card2);border-radius:999px;padding:4px 10px}
 
+/* Offline */
+.offline{background:#3a2e12;color:#f3dfa8;text-align:center;font-size:.9rem;padding-block:8px}
+.saveoff{display:flex;flex-wrap:wrap;gap:8px;align-items:center;flex-basis:100%}
+.progress{height:6px;border-radius:99px;background:var(--line);overflow:hidden;flex:1 1 160px;max-width:260px}
+.progress i{display:block;height:100%;width:0;background:var(--gold);transition:width .3s}
+
 /* Yard planner */
 .yform{display:grid;gap:14px}
 fieldset{border:0;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
@@ -221,12 +233,18 @@ footer .wrap{display:grid;gap:4px}
   </nav>
 </div>
 
+<div class="offline gut" id="offlineBar" hidden role="status">You're offline. Showing what's saved on this device.</div>
 <div class="gut" style="border-bottom:1px solid var(--line)">
   <div class="locbar">
     <div class="where"><span class="eyebrow">📍 Your location</span><b id="locName">Not set</b><span class="small" id="locHint"></span></div>
     <button class="btn" type="button" id="locBtn">Use my location</button>
     <form class="city" id="cityForm"><label class="sr" for="city">City</label><input class="field" id="city" placeholder="or type a city" autocomplete="off"><button class="btn" type="submit">Set</button></form>
     <div class="row" id="cityResults" style="flex-basis:100%"></div>
+    <div class="saveoff">
+      <button class="btn sm" type="button" id="saveOff">⬇ Save my area now</button>
+      <div class="progress" id="saveBar" hidden><i></i></div>
+      <span class="small" id="saveMsg"></span>
+    </div>
   </div>
 </div>
 
@@ -363,6 +381,7 @@ footer .wrap{display:grid;gap:4px}
         <div class="row"><button class="btn primary" type="submit">Save sighting</button><button class="btn" type="button" id="recCancel">Cancel</button><span class="small" id="recMsg"></span></div>
       </form>
       <div class="recs" id="recs" style="margin-top:18px"></div>
+      <p class="small" id="queueMsg" hidden></p>
       <p class="empty" id="recEmpty">No sightings yet. Identify a photo or tap <b>Add a sighting</b> to start your record.</p>
     </div>
   </section>
@@ -410,6 +429,10 @@ async function getJSON(url, ms = 12000) {
   cache.set(url, p); p.catch(() => cache.delete(url));
   return p;
 }
+// Species saved by "Save my area for offline", so search and details work without internet.
+let offlineIdx = store.get("nn-offline", null); // { label, savedAt, species: [tileData] }
+const offlineFind = (id) => offlineIdx?.species?.find((s) => s.id === id);
+const isOffline = () => navigator.onLine === false;
 const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
 function setMsg(el, msg, err) { el.textContent = msg || ""; el.classList.toggle("err", !!err); }
 
@@ -423,7 +446,7 @@ function showTab(t) {
   document.querySelectorAll(".tab").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === t));
   document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("on", p.id === "p-" + t));
   try { history.replaceState(null, "", "#" + t); } catch {}
-  if (t === "map") initMap();
+  if (t === "map") { try { initMap(); } catch (e) { console.warn("Map failed to start", e); } }
   if (t === "bloom") loadBloom();
   if (t === "key" && !opened.has("key")) keyStart();
   opened.add(t);
@@ -578,7 +601,18 @@ async function openSpecies(id) {
       if ($("dlgStatus")) $("dlgStatus").innerHTML = st ? statusBox({ ...st, source: "iNaturalist" }) : statusBox({ status: "unknown" });
     }
   } catch {
-    dlgBody.innerHTML = `${closeBtn}<p class="status err">Couldn't load this species. Check your internet connection and try again.</p>`;
+    const s = offlineFind(id);
+    dlgBody.innerHTML = s ? `${closeBtn}
+      <div><h2 class="common">${esc(s.common)}</h2>${s.common !== s.name ? `<p class="sci">${esc(s.name)}</p>` : ""}</div>
+      ${s.photo ? `<img src="${esc(s.photo)}" alt="${esc(s.common)}" style="width:min(240px,100%);aspect-ratio:1;object-fit:cover;border-radius:12px">` : ""}
+      ${s.status ? statusBox({ status: s.status, place: offlineIdx.region }) : ""}
+      <p class="small">You're offline, so only the saved basics are shown. Full details come back when you're online.</p>
+      <div class="row"><button class="btn primary" type="button" id="dlgRec">Add to Camera Record</button></div>`
+      : `${closeBtn}<p class="status err">Couldn't load this species. Check your internet connection and try again.</p>`;
+    if (s) $("dlgRec").onclick = () => {
+      addRecord({ name: s.common, sci: s.name, taxonId: s.id, group: s.iconic === "Plantae" ? "plant" : "animal", status: s.status, statusPlace: offlineIdx.region, thumb: s.photo, source: "Added" });
+      $("dlgRec").textContent = "Added ✓"; $("dlgRec").disabled = true;
+    };
   }
 }
 dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
@@ -602,6 +636,22 @@ cityPicker($("mapForm"), $("mapQ"), $("mapResults"), (c) => explore(c.lat, c.lng
 $("mapReset").onclick = () => { if (marker) { marker.remove(); marker = null; } map?.fitBounds([[-85, -180], [85, 180]]); $("mapPanel").innerHTML = `<p class="lead" style="margin:0">Tap anywhere on the map, or search a place, to see what grows and lives there.</p>`; };
 $("mapMine").onclick = () => { if (loc) explore(loc.lat, loc.lng, loc.label); else askLocation(); };
 
+// The species lists for a spot: used by the map and by "Save my area for offline".
+async function regionLists(lat, lng) {
+  const places = await placesAt(lat, lng);
+  const place = places.find((p) => p.level <= 20) || places[0];
+  if (place) {
+    const [plants, animals, intro] = await Promise.all([
+      speciesCounts({ place_id: place.id, native: "true", iconic_taxa: "Plantae" }, 12),
+      speciesCounts({ place_id: place.id, native: "true", iconic_taxa: ANIMALS }, 12),
+      speciesCounts({ place_id: place.id, introduced: "true", iconic_taxa: "Plantae," + ANIMALS }, 12)
+    ]);
+    return { place, sections: [["Native plants", "var(--native)", plants, "native"], ["Native wildlife", "var(--native)", animals, "native"], ["Introduced and invasive", "var(--invasive)", intro, "introduced"]] };
+  }
+  const ll = { lat, lng, radius: "50" };
+  const [plants, animals] = await Promise.all([speciesCounts({ ...ll, iconic_taxa: "Plantae" }, 12), speciesCounts({ ...ll, iconic_taxa: ANIMALS }, 12)]);
+  return { place: null, sections: [["Plants seen here", "var(--green)", plants], ["Wildlife seen here", "var(--green)", animals]] };
+}
 let exploreRun = 0;
 async function explore(lat, lng, label) {
   const run = ++exploreRun;
@@ -609,31 +659,16 @@ async function explore(lat, lng, label) {
   const panel = $("mapPanel");
   panel.innerHTML = `<p class="small">Looking up what lives here…</p>`;
   try {
-    const places = await placesAt(lat, lng);
+    const { place, sections } = await regionLists(lat, lng);
     if (run !== exploreRun) return;
-    const place = places.find((p) => p.level <= 20) || places[0];
     const name = label || place?.name || `${lat.toFixed(2)}, ${lng.toFixed(2)}`;
-    let sections;
-    if (place) {
-      const [plants, animals, intro] = await Promise.all([
-        speciesCounts({ place_id: place.id, native: "true", iconic_taxa: "Plantae" }, 12),
-        speciesCounts({ place_id: place.id, native: "true", iconic_taxa: ANIMALS }, 12),
-        speciesCounts({ place_id: place.id, introduced: "true", iconic_taxa: "Plantae," + ANIMALS }, 12)
-      ]);
-      sections = [["Native plants", "var(--native)", plants], ["Native wildlife", "var(--native)", animals], ["Introduced and invasive", "var(--invasive)", intro]];
-    } else {
-      const ll = { lat, lng, radius: "50" };
-      const [plants, animals] = await Promise.all([speciesCounts({ ...ll, iconic_taxa: "Plantae" }, 12), speciesCounts({ ...ll, iconic_taxa: ANIMALS }, 12)]);
-      sections = [["Plants seen here", "var(--green)", plants], ["Wildlife seen here", "var(--green)", animals]];
-    }
-    if (run !== exploreRun) return;
     panel.innerHTML = `<span class="eyebrow">${place ? "Region" : "Within 50 km"}</span><h2 class="h">${esc(name)}</h2>
       <div class="row"><button class="btn sm" type="button" id="useHere">Set as my location</button></div>
       ${sections.map(([h, c, list]) => `<div class="group"><h3><span class="dot" style="background:${c}"></span>${h}</h3>${tiles(list)}</div>`).join("")}
       ${place ? "" : `<p class="small" style="margin-top:14px">This spot isn't inside a mapped region, so native status isn't available.</p>`}`;
     $("useHere").onclick = () => { setLocation(lat, lng, label); $("useHere").textContent = "Location set ✓"; };
   } catch (e) {
-    if (run === exploreRun) panel.innerHTML = `<p class="status err">${esc(e.message || "Couldn't load this place. Try again.")}</p>`;
+    if (run === exploreRun) panel.innerHTML = `<p class="status err">${esc(isOffline() ? "You're offline, and this place isn't saved. Tap \"Go to my location\" to see your saved area." : e.message || "Couldn't load this place. Try again.")}</p>`;
   }
 }
 
@@ -641,6 +676,12 @@ async function explore(lat, lng, label) {
    In Bloom Now
    ========================================================= */
 let bloomFor = "";
+async function bloomData() {
+  const base = { lat: loc.lat, lng: loc.lng, radius: "50", iconic_taxa: "Plantae", term_id: "12", term_value_id: "13" };
+  let list = await speciesCounts({ ...base, d1: daysAgo(30) }, 36), span = "the last 30 days";
+  if (list.length < 6) { list = await speciesCounts({ ...base, d1: daysAgo(90) }, 36); span = "the last 3 months"; }
+  return { list, span };
+}
 async function loadBloom(force) {
   const st = $("bloomStatus"), out = $("bloomTiles");
   if (!loc) { setMsg(st, "Set your location above to see what's flowering near you."); out.innerHTML = ""; bloomFor = ""; return; }
@@ -650,12 +691,10 @@ async function loadBloom(force) {
   $("bloomLead").textContent = `Plants people have photographed flowering within 50 km of ${loc.label}.`;
   setMsg(st, "Finding flowers…"); out.innerHTML = "";
   try {
-    const base = { lat: loc.lat, lng: loc.lng, radius: "50", iconic_taxa: "Plantae", term_id: "12", term_value_id: "13" };
-    let list = await speciesCounts({ ...base, d1: daysAgo(30) }, 36), span = "the last 30 days";
-    if (list.length < 6) { list = await speciesCounts({ ...base, d1: daysAgo(90) }, 36); span = "the last 3 months"; }
-    setMsg(st, list.length ? `${list.length} species flowering in ${span}. Tap one for details.` : "No flowering plants have been recorded near you recently. Try again in spring!");
+    const { list, span } = await bloomData();
+    setMsg(st, (isOffline() ? "Saved list (you're offline). " : "") + (list.length ? `${list.length} species flowering in ${span}. Tap one for details.` : "No flowering plants have been recorded near you recently. Try again in spring!"));
     out.innerHTML = tilesInner(list, "flowering sightings");
-  } catch (e) { setMsg(st, e.message, true); bloomFor = ""; }
+  } catch (e) { setMsg(st, isOffline() ? "You're offline. Use \"Save my area for offline\" next time you're online to see flowers without internet." : e.message, true); bloomFor = ""; }
 }
 locListeners.push(() => { if ($("p-bloom").classList.contains("on")) loadBloom(true); else bloomFor = ""; });
 
@@ -669,6 +708,7 @@ async function runSearch(q) {
   setMsg(st, "Searching…");
   const enc = encodeURIComponent(q);
   try {
+    if (isOffline()) throw new Error("offline");
     let d;
     try { d = await getJSON(`${INAT}/taxa/autocomplete?q=${enc}&per_page=20`, 8000); }
     catch { if (run !== searchRun) return; setMsg(st, "Still searching…"); d = await getJSON(`${INAT}/taxa?q=${enc}&per_page=20`); }
@@ -676,7 +716,16 @@ async function runSearch(q) {
     const list = (d.results || []).filter((t) => KEEP.has(t.iconic_taxon_name)).map((t) => tileData(t, t.observations_count));
     setMsg(st, list.length ? `${list.length} match${list.length === 1 ? "" : "es"}. Tap a species to see details.` : `No plants or animals match "${q}". Try another spelling or a shorter name.`);
     out.innerHTML = tilesInner(list);
-  } catch (e) { if (run === searchRun) { setMsg(st, e.message, true); out.innerHTML = ""; } }
+  } catch (e) {
+    if (run !== searchRun) return;
+    // Offline: search the species saved for your area.
+    const ql = q.toLowerCase();
+    const saved = (offlineIdx?.species || []).filter((s) => s.common.toLowerCase().includes(ql) || s.name.toLowerCase().includes(ql));
+    if (offlineIdx) {
+      setMsg(st, saved.length ? `You're offline. ${saved.length} saved species match.` : `You're offline, and no saved species match "${q}".`, !saved.length);
+      out.innerHTML = tilesInner(saved);
+    } else { setMsg(st, e.message, true); out.innerHTML = ""; }
+  }
 }
 $("searchQ").oninput = (e) => { clearTimeout(searchT); searchT = setTimeout(() => runSearch(e.target.value.trim()), 350); };
 $("searchForm").onsubmit = (e) => { e.preventDefault(); clearTimeout(searchT); runSearch($("searchQ").value.trim()); };
@@ -733,16 +782,24 @@ async function taxonId(name, rank) {
   if (!hit) throw new Error("Couldn't find that group on iNaturalist.");
   return hit.id;
 }
+async function keyData(node) {
+  const id = await taxonId(node.taxon, node.rank);
+  const where = loc ? { lat: loc.lat, lng: loc.lng, radius: "50" } : {};
+  return speciesCounts({ taxon_id: String(id), ...where }, 24);
+}
+function keyEnds(n = KEY, out = []) {
+  n = resolveNode(n);
+  if (n.end) { if (!out.includes(n)) out.push(n); return out; }
+  keyEnds(n.yes, out); keyEnds(n.no, out); return out;
+}
 async function keyResults(node) {
   const st = $("kStatus");
   try {
-    const id = await taxonId(node.taxon, node.rank);
-    const where = loc ? { lat: loc.lat, lng: loc.lng, radius: "50" } : {};
-    const list = await speciesCounts({ taxon_id: String(id), ...where }, 24);
+    const list = await keyData(node);
     if (!$("kTiles")) return;
     setMsg(st, list.length ? (loc ? `The most-seen ${node.end.toLowerCase()} within 50 km of ${loc.label}. Tap one to compare.` : `The most-seen ${node.end.toLowerCase()} worldwide. Set your location to see ones near you.`) : "None recorded near you yet.");
     $("kTiles").innerHTML = tiles(list);
-  } catch (e) { setMsg(st, e.message, true); }
+  } catch (e) { setMsg(st, isOffline() ? "You're offline. Save your area for offline next time to see species here without internet." : e.message, true); }
 }
 
 /* =========================================================
@@ -756,6 +813,12 @@ if (yardSaved) {
     i.checked = Array.isArray(v) ? v.includes(i.value) : v === i.value;
   });
 }
+let yardCopyText = "";
+{ const last = store.get("nn-yard-last", null); if (last?.html) { $("yardOut").innerHTML = last.html; yardCopyText = last.copy || ""; } }
+$("yardOut").addEventListener("click", async (e) => {
+  const b = e.target.closest("#yardCopy"); if (!b) return;
+  try { await navigator.clipboard.writeText(yardCopyText); b.textContent = "Copied ✓"; } catch { b.textContent = "Couldn't copy"; }
+});
 const nameOf = (p) => (p.common && p.common !== p.name ? p.common : p.name);
 async function localPlants() {
   // Native plants recorded in the most specific region that has enough of them.
@@ -774,6 +837,7 @@ $("yardForm").onsubmit = async (e) => {
   const prefs = { family: f.getAll("family"), attract: f.getAll("attract"), types: f.getAll("types"), sun: f.get("sun"), water: f.get("water"), space: f.get("space") };
   store.set("nn-yard", prefs);
   if (!loc) { setMsg(st, "Set your location at the top of the page first.", true); return; }
+  if (isOffline()) { setMsg(st, "The Yard Planner needs the internet to ask Claude. Your last plant list is shown here.", true); return; }
   $("yardGo").disabled = true;
   try {
     setMsg(st, "Finding native plants near you…");
@@ -807,10 +871,8 @@ $("yardForm").onsubmit = async (e) => {
         <div class="row"><a class="btn" style="text-decoration:none" target="_blank" rel="noopener" href="https://www.google.com/maps/search/${encodeURIComponent("native plant nursery near " + loc.label)}">Find native plant nurseries near you</a>
           <button class="btn" type="button" id="yardCopy">Copy list</button></div></div>
       <p class="small" style="margin-top:14px">Suggestions by Claude from native plants recorded on iNaturalist. Check plant tags for safety before buying.</p>`;
-    $("yardCopy").onclick = async () => {
-      const text = r.picks.map((p) => `- ${p.common_name} (${p.scientific_name})`).join("\n");
-      try { await navigator.clipboard.writeText(`Native plants for ${loc.label}:\n${text}`); $("yardCopy").textContent = "Copied ✓"; } catch { $("yardCopy").textContent = "Couldn't copy"; }
-    };
+    yardCopyText = `Native plants for ${loc.label}:\n` + r.picks.map((p) => `- ${p.common_name} (${p.scientific_name})`).join("\n");
+    store.set("nn-yard-last", { html: out.innerHTML, copy: yardCopyText });
     setMsg(st, "");
     if (innerWidth < 820) out.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (err) { setMsg(st, err.message, true); }
@@ -1008,8 +1070,12 @@ file.onchange = () => choose(file.files[0]);
 drop.addEventListener("drop", (e) => { e.preventDefault(); choose(e.dataTransfer.files[0]); });
 document.addEventListener("paste", (e) => { const f = [...(e.clipboardData?.files || [])][0]; if (f) { showTab("photo"); choose(f); } });
 
+class OfflineError extends Error {}
 async function api(path, body) {
-  const res = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (isOffline()) throw new OfflineError("You're offline.");
+  let res;
+  try { res = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }); }
+  catch { throw new OfflineError("Couldn't reach the server. Check your internet connection."); }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || (res.status === 504 ? "The server took too long. Try again." : "Something went wrong. Try again."));
   return data;
@@ -1033,71 +1099,221 @@ async function inaturalist(sci, coords) {
 function showSteps(list) { stepsEl.hidden = false; stepsEl.innerHTML = list.map((s) => `<li data-k="${s[0]}">○ ${esc(s[1])}</li>`).join(""); }
 function step(k, state) { const li = stepsEl.querySelector(`[data-k="${k}"]`); if (!li) return; li.className = state; li.textContent = (state === "done" ? "● " : state === "on" ? "◐ " : "○ ") + li.textContent.slice(2); }
 
+// Identify one photo. Shared by the Identify button and the offline queue.
+async function identifyPhoto(p, ctx, ui) {
+  const place = loc?.label || "", coords = loc ? { lat: loc.lat, lng: loc.lng } : null;
+  if (ui) showSteps([["claude", "Claude looks at the photo"], ["plantnet", "Pl@ntNet checks plants"], ["inat", "iNaturalist species details"]]);
+  step("claude", "on");
+  let r = await api("/api/identify", { image: p.base64, mediaType: p.mediaType, where: ctx, place });
+  step("claude", "done");
+  if (r.group !== "plant" && r.group !== "animal") return { group: "none" };
+  r.source = "Claude";
+  if (r.group === "plant") {
+    step("plantnet", "on");
+    try {
+      const pn = await api("/api/plantnet", { image: p.base64, mediaType: p.mediaType });
+      const matches = pn.matches || [], top = matches[0];
+      if (top && top.score >= 15) {
+        const claudeName = r.scientific_name;
+        if (!sameSpecies(top.scientific_name, claudeName)) {
+          const d = await api("/api/describe", { scientific_name: top.scientific_name, common_name: top.common_name, where: ctx, place });
+          r = { ...r, ...d, group: "plant" };
+          r.note = `Claude first guessed ${claudeName}, but Pl@ntNet's botanist-trained match is used here.`;
+        }
+        Object.assign(r, { scientific_name: top.scientific_name, common_name: r.common_name || top.common_name, confidence: top.score, source: "Pl@ntNet" });
+        r.taxonomy = { ...(r.taxonomy || {}), family: top.family || r.taxonomy?.family, genus: top.genus || r.taxonomy?.genus };
+        const others = matches.slice(1, 4).filter((m) => m.score >= 5).map((m) => `${m.common_name || m.scientific_name} (${m.score}%)`);
+        if (others.length) r.similar = others;
+      } else if (!pn.disabled) r.note = "Pl@ntNet wasn't sure about this one, so Claude's ID is shown.";
+    } catch (e) { r.note = `Pl@ntNet didn't answer (${e.message}), so Claude's ID is shown.`; }
+    step("plantnet", "done");
+  } else stepsEl.querySelector('[data-k="plantnet"]')?.remove();
+
+  if (r.scientific_name) {
+    step("inat", "on");
+    r.inat = await inaturalist(r.scientific_name, coords);
+    if (r.inat) {
+      r.taxonomy = { ...(r.taxonomy || {}), ...Object.fromEntries(Object.entries(r.inat.taxonomy).filter(([, v]) => v)) };
+      if (!r.common_name && r.inat.common) r.common_name = r.inat.common;
+    }
+    if (loc) {
+      r.placeLabel = loc.label;
+      const claudeSays = ["native", "introduced", "invasive"].includes(r.native_status) ? r.native_status : null;
+      const inatSays = r.inat ? await nativeStatus(r.inat.id).catch(() => null) : null;
+      if (inatSays?.status === "native") Object.assign(r, { status: "native", statusPlace: inatSays.place, statusSource: "iNaturalist" });
+      else if (inatSays?.status === "introduced") Object.assign(r, { status: claudeSays === "invasive" ? "invasive" : "introduced", statusPlace: inatSays.place, statusSource: "iNaturalist" });
+      else if (claudeSays) Object.assign(r, { status: claudeSays, statusSource: "Claude's estimate", statusNote: r.native_note || "" });
+      else r.status = "unknown";
+    }
+    step("inat", "done");
+  }
+  return r;
+}
+function recordFromResult(r, th, ctx, date) {
+  const { thumb: _t, ...result } = r;
+  return { name: r.common_name || r.scientific_name, sci: r.scientific_name, taxonId: r.inat?.id, group: r.group, status: r.status === "unknown" ? undefined : r.status,
+    statusPlace: r.statusPlace, thumb: th, source: "Photo ID", notes: ctx, result, ...(date ? { date } : {}) };
+}
+
 go.onclick = async () => {
   if (!photo) return;
   go.disabled = true; setMsg(statusEl, "");
-  const ctx = where.value.trim(), place = loc?.label || "", coords = loc ? { lat: loc.lat, lng: loc.lng } : null;
-  showSteps([["claude", "Claude looks at the photo"], ["plantnet", "Pl@ntNet checks plants"], ["inat", "iNaturalist species details"]]);
+  const ctx = where.value.trim();
   try {
-    step("claude", "on");
-    let r = await api("/api/identify", { image: photo.base64, mediaType: photo.mediaType, where: ctx, place });
-    step("claude", "done");
-    if (r.group !== "plant" && r.group !== "animal") { label.innerHTML = `<h2 class="common">This is not a plant or animal.</h2>`; stepsEl.hidden = true; return; }
-    r.source = "Claude";
-    if (r.group === "plant") {
-      step("plantnet", "on");
-      try {
-        const pn = await api("/api/plantnet", { image: photo.base64, mediaType: photo.mediaType });
-        const matches = pn.matches || [], top = matches[0];
-        if (top && top.score >= 15) {
-          const claudeName = r.scientific_name;
-          if (!sameSpecies(top.scientific_name, claudeName)) {
-            const d = await api("/api/describe", { scientific_name: top.scientific_name, common_name: top.common_name, where: ctx, place });
-            r = { ...r, ...d, group: "plant" };
-            r.note = `Claude first guessed ${claudeName}, but Pl@ntNet's botanist-trained match is used here.`;
-          }
-          Object.assign(r, { scientific_name: top.scientific_name, common_name: r.common_name || top.common_name, confidence: top.score, source: "Pl@ntNet" });
-          r.taxonomy = { ...(r.taxonomy || {}), family: top.family || r.taxonomy?.family, genus: top.genus || r.taxonomy?.genus };
-          const others = matches.slice(1, 4).filter((m) => m.score >= 5).map((m) => `${m.common_name || m.scientific_name} (${m.score}%)`);
-          if (others.length) r.similar = others;
-        } else if (!pn.disabled) r.note = "Pl@ntNet wasn't sure about this one, so Claude's ID is shown.";
-      } catch (e) { r.note = `Pl@ntNet didn't answer (${e.message}), so Claude's ID is shown.`; }
-      step("plantnet", "done");
-    } else stepsEl.querySelector('[data-k="plantnet"]')?.remove();
-
-    if (r.scientific_name) {
-      step("inat", "on");
-      r.inat = await inaturalist(r.scientific_name, coords);
-      if (r.inat) {
-        r.taxonomy = { ...(r.taxonomy || {}), ...Object.fromEntries(Object.entries(r.inat.taxonomy).filter(([, v]) => v)) };
-        if (!r.common_name && r.inat.common) r.common_name = r.inat.common;
-      }
-      if (loc) {
-        r.placeLabel = loc.label;
-        const claudeSays = ["native", "introduced", "invasive"].includes(r.native_status) ? r.native_status : null;
-        const inatSays = r.inat ? await nativeStatus(r.inat.id).catch(() => null) : null;
-        if (inatSays?.status === "native") Object.assign(r, { status: "native", statusPlace: inatSays.place, statusSource: "iNaturalist" });
-        else if (inatSays?.status === "introduced") Object.assign(r, { status: claudeSays === "invasive" ? "invasive" : "introduced", statusPlace: inatSays.place, statusSource: "iNaturalist" });
-        else if (claudeSays) Object.assign(r, { status: claudeSays, statusSource: "Claude's estimate", statusNote: r.native_note || "" });
-        else r.status = "unknown";
-      }
-      step("inat", "done");
-    }
+    if (isOffline()) throw new OfflineError("You're offline.");
+    const r = await identifyPhoto(photo, ctx, true);
+    stepsEl.hidden = true;
+    if (r.group === "none") { label.innerHTML = `<h2 class="common">This is not a plant or animal.</h2>`; return; }
     r.date = new Date().toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
     const th = await thumb(photo.blob).catch(() => "");
     r.thumb = th;
-    render(r); setMsg(statusEl, "Saved to your Camera Record."); stepsEl.hidden = true;
-    const { thumb: _t, ...result } = r;
-    addRecord({ name: r.common_name || r.scientific_name, sci: r.scientific_name, taxonId: r.inat?.id, group: r.group, status: r.status === "unknown" ? undefined : r.status,
-      statusPlace: r.statusPlace, thumb: th, source: "Photo ID", notes: ctx, result });
-  } catch (e) { setMsg(statusEl, e.message, true); stepsEl.hidden = true; }
-  finally { go.disabled = !photo; }
+    render(r); setMsg(statusEl, "Saved to your Camera Record.");
+    addRecord(recordFromResult(r, th, ctx));
+  } catch (e) {
+    stepsEl.hidden = true;
+    if (e instanceof OfflineError) {
+      try {
+        await queue.add({ id: Date.now() + "", base64: photo.base64, mediaType: photo.mediaType, ctx, date: new Date().toISOString(), loc });
+        setMsg(statusEl, "No internet, so your photo is saved. It will be identified automatically when you're back online.");
+        drawQueue();
+      } catch { setMsg(statusEl, "You're offline, and this browser couldn't save the photo for later.", true); }
+    } else setMsg(statusEl, e.message, true);
+  } finally { go.disabled = !photo; }
 };
+
+/* =========================================================
+   Offline: photo queue (IndexedDB)
+   ========================================================= */
+const queue = (() => {
+  let dbp;
+  const open = () => dbp ??= new Promise((res, rej) => {
+    const r = indexedDB.open("native-nature", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("queue", { keyPath: "id" });
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+  const run = async (mode, fn) => {
+    const db = await open();
+    return new Promise((res, rej) => { const t = db.transaction("queue", mode), req = fn(t.objectStore("queue")); t.oncomplete = () => res(req.result); t.onerror = () => rej(t.error); });
+  };
+  return { add: (v) => run("readwrite", (s) => s.put(v)), all: () => run("readonly", (s) => s.getAll()), del: (id) => run("readwrite", (s) => s.delete(id)) };
+})();
+async function drawQueue() {
+  const n = (await queue.all().catch(() => [])).length, m = $("queueMsg");
+  m.hidden = !n;
+  m.textContent = n ? `📷 ${n} photo${n === 1 ? "" : "s"} waiting to be identified when you're back online.` : "";
+}
+let draining = false;
+async function drainQueue() {
+  if (draining || isOffline()) return;
+  draining = true;
+  try {
+    const items = await queue.all().catch(() => []);
+    let done = 0;
+    for (const it of items) {
+      try {
+        const bin = atob(it.base64), bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const blob = new Blob([bytes], { type: it.mediaType });
+        const saveLoc = loc; if (it.loc) loc = it.loc; // identify for where the photo was taken
+        let r; try { r = await identifyPhoto({ base64: it.base64, mediaType: it.mediaType }, it.ctx, false); } finally { loc = saveLoc; }
+        if (r.group !== "none") addRecord(recordFromResult(r, await thumb(blob).catch(() => ""), it.ctx, it.date));
+        await queue.del(it.id); done++;
+      } catch (e) { if (e instanceof OfflineError) break; console.warn("Queued photo failed", e); await queue.del(it.id).catch(() => {}); }
+    }
+    if (done) setMsg(statusEl, `Back online: identified ${done} saved photo${done === 1 ? "" : "s"}. See your Camera Record.`);
+  } finally { draining = false; drawQueue(); }
+}
+
+/* =========================================================
+   Offline: save my area
+   ========================================================= */
+function tileUrls(lat, lng) {
+  const urls = [], t = (z, la, ln) => {
+    const n = 2 ** z, x = Math.floor(((ln + 180) / 360) * n), r = (la * Math.PI) / 180;
+    const y = Math.floor(((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * n);
+    return [Math.max(0, Math.min(n - 1, x)), Math.max(0, Math.min(n - 1, y))];
+  };
+  for (let z = 2; z <= 13; z++) {
+    const d = z <= 6 ? 6 : z <= 9 ? 0.6 : z <= 11 ? 0.2 : 0.06; // degrees around you to save at each zoom
+    const [x1, y1] = t(z, lat + d, lng - d), [x2, y2] = t(z, lat - d, lng + d);
+    for (let x = x1; x <= x2; x++) for (let y = y1; y <= y2; y++)
+      urls.push(`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`);
+  }
+  return urls;
+}
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+let saving = false;
+// full = everything (key, photos, map). Quick saves refresh only the species lists and flowers.
+async function saveArea(full = true, quiet = false) {
+  const msg = $("saveMsg"), bar = $("saveBar"), btn = $("saveOff");
+  if (saving) return;
+  if (!loc) { if (!quiet) msg.textContent = "Set your location first."; return; }
+  if (isOffline()) { if (!quiet) msg.textContent = "Connect to the internet to save your area."; return; }
+  if (!("serviceWorker" in navigator) || !navigator.serviceWorker.controller) { if (!quiet) msg.textContent = "Reload the page once, then try again (the offline helper is still starting)."; return; }
+  saving = true; btn.disabled = true; if (!quiet) bar.hidden = false;
+  const say = (t) => { if (!quiet) msg.textContent = t; };
+  const ends = full ? keyEnds() : [], total = full ? 2 + ends.length + 3 : 2;
+  let doneSteps = 0;
+  const tick = (label) => { doneSteps++; bar.firstElementChild.style.width = Math.round((doneSteps / total) * 100) + "%"; say(label); };
+  const species = new Map(), add = (list, status) => list.forEach((s) => { if (!species.has(s.id)) species.set(s.id, { ...s, status }); });
+  // A quick save keeps the species saved last time and adds or updates the latest ones.
+  const sameArea = offlineIdx?.label === loc.label;
+  if (!full && sameArea) (offlineIdx.species || []).forEach((s) => species.set(s.id, s));
+  try {
+    say("Saving native and invasive species…");
+    const reg = await regionLists(loc.lat, loc.lng);
+    reg.sections.forEach(([, , list, status]) => add(list, status)); tick("Saving flowers in bloom…");
+    add((await bloomData()).list); tick("Saving the Guided ID Key…");
+    for (const node of ends) { try { add(await keyData(node)); } catch {} await pause(400); tick(`Saving ${node.end.toLowerCase()}…`); }
+    // Photos: a full save gets them all; a quick save only gets ones not saved before.
+    const before = new Set(full ? [] : (offlineIdx?.species || []).map((s) => s.photo));
+    const photos = [...species.values()].map((s) => s.photo).filter((u) => u && !before.has(u));
+    say(`Saving ${photos.length} photos…`);
+    for (let i = 0; i < photos.length; i += 8) await Promise.allSettled(photos.slice(i, i + 8).map((u) => fetch(u, { mode: "no-cors" })));
+    if (full) {
+      tick("Saving the map…");
+      const tilesList = tileUrls(loc.lat, loc.lng);
+      for (let i = 0; i < tilesList.length; i += 8) await Promise.allSettled(tilesList.slice(i, i + 8).map((u) => fetch(u, { mode: "no-cors" })));
+      tick("Saving the site…");
+    }
+    const now = new Date().toISOString();
+    offlineIdx = { label: loc.label, region: reg.place?.short || loc.label, savedAt: now, fullAt: full ? now : (sameArea ? offlineIdx?.fullAt : null), species: [...species.values()] };
+    store.set("nn-offline", offlineIdx);
+    if (full && !quiet) msg.textContent = `Saved ${species.size} species, ${photos.length} photos and the map around ${loc.label}. These now work without internet.`;
+    else showSavedInfo();
+  } catch (e) {
+    if (!quiet) msg.textContent = `Saving stopped: ${e.message} Try again.`;
+  } finally { saving = false; btn.disabled = false; setTimeout(() => (bar.hidden = true), 1500); }
+}
+$("saveOff").onclick = () => saveArea(true, false);
+function showSavedInfo() {
+  if (!offlineIdx?.savedAt) return;
+  const t = new Date(offlineIdx.savedAt);
+  $("saveMsg").textContent = `Auto-saving for offline every 2 min · last saved ${t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} (${offlineIdx.label})`;
+}
+// Auto-save: quick save every 2 minutes; full save when the area changes or once a day.
+const AUTO_MS = 2 * 60 * 1000, DAY_MS = 24 * 60 * 60 * 1000;
+function autoSave() {
+  if (document.hidden || !loc) return;
+  const needFull = offlineIdx?.label !== loc.label || !offlineIdx?.fullAt || Date.now() - new Date(offlineIdx.fullAt) > DAY_MS;
+  saveArea(needFull, true);
+}
+setInterval(autoSave, AUTO_MS);
+locListeners.push(() => setTimeout(autoSave, 3000));
 
 /* =========================================================
    Start
    ========================================================= */
-render(EXAMPLE); drawRecords(); drawStats(); showLoc();
+render(EXAMPLE); drawRecords(); drawStats(); showLoc(); showSavedInfo(); drawQueue();
+function onlineState() {
+  $("offlineBar").hidden = !isOffline();
+  if (!isOffline()) drainQueue();
+}
+addEventListener("online", onlineState); addEventListener("offline", onlineState); onlineState();
+navigator.serviceWorker?.ready.then(() => setTimeout(autoSave, 5000)); // first auto-save shortly after the page opens
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch((e) => console.warn("Offline helper didn't start:", e)));
+}
 showTab((location.hash || "#map").slice(1));
 (async () => {
   if (loc) return;

@@ -14,6 +14,14 @@ Native plants, wildlife, and invasive species, anywhere on Earth.
 
 The site asks for your location once (or you can type a city) and remembers it in your browser.
 
+## Works offline
+
+- It can be installed like an app ("Add to Home Screen" on phones, the install icon in Chrome's address bar on computers).
+- While it's open and online, it **auto-saves your area every 2 minutes** (species lists and flowers), and does a **full save** (Guided ID Key, photos, and the map around you) when your location changes or once a day. There's also a **Save my area now** button.
+- Offline, these keep working with your saved area: **World Map, In Bloom Now, Guided ID Key, Identify a Species (saved species), Camera Record**.
+- **Photo ID** needs the internet (Claude and Pl@ntNet run online). Photos taken offline are saved and identified automatically when you're back online.
+- **Yard Planner** needs the internet; your last plant list stays visible offline.
+
 **No API keys are stored in this code.** They go in Netlify's settings, so this repo is safe to keep on GitHub.
 
 ## Put it online

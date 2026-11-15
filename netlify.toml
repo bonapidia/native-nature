@@ -4,3 +4,9 @@
 
 [functions]
   node_bundler = "esbuild"
+
+# Always fetch the newest offline helper so updates reach installed copies.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
